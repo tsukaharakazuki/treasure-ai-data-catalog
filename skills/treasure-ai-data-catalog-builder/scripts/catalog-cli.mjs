@@ -7,6 +7,7 @@
 //   node catalog-cli.mjs diff <dir> [--from r0001] [--to r0002|current]
 //   node catalog-cli.mjs pack <dir> --out <file.zip> [--force]
 //   node catalog-cli.mjs unpack <file.zip> <dir>
+//   node catalog-cli.mjs relationships <dir> [--write]   # ID体系から ER 候補と一致率検証 SQL を出す
 //   node catalog-cli.mjs skill <dir> --out <skills-root-or-skill-dir> [--zip <skill.zip>] [--template <SKILL.md.tmpl>]
 //
 // This tool only touches local files. It never calls Treasure Data or tdx.
@@ -45,12 +46,110 @@ function walk(root) {
   return out
 }
 
+// ---------------------------------------------------------------------------
+// Relationships (mirrors src/core/relations.ts)
+
+const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+const str = (value) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
+const strList = (value) => (Array.isArray(value) ? value.map(str).filter(Boolean) : str(value) ? [str(value)] : [])
+
+export function relationshipItems(file) {
+  if (Array.isArray(file)) return file
+  if (isRecord(file)) for (const key of ['relationships', 'relations', 'edges']) if (Array.isArray(file[key])) return file[key]
+  return []
+}
+
+function relationEnd(value, flatTable, flatColumns) {
+  if (isRecord(value)) {
+    const database = str(value.database) ?? str(value.db)
+    const name = str(value.table) ?? str(value.name)
+    const table = database && name && !name.includes('.') ? `${database}.${name}` : name
+    return { table, columns: strList(value.columns ?? value.column ?? value.keys ?? value.key) }
+  }
+  const text = str(value)
+  if (text) {
+    const parts = text.split('.')
+    if (parts.length >= 3 && !flatColumns) return { table: parts.slice(0, -1).join('.'), columns: [parts.at(-1)] }
+    return { table: text, columns: strList(flatColumns) }
+  }
+  return { table: str(flatTable), columns: strList(flatColumns) }
+}
+
+export function normalizeRelationship(raw) {
+  if (!isRecord(raw)) return undefined
+  const from = relationEnd(raw.from ?? raw.source ?? raw.child, raw.from_table ?? raw.source_table ?? raw.child_table, raw.from_columns ?? raw.from_column ?? raw.source_column ?? raw.child_column)
+  const to = relationEnd(raw.to ?? raw.target ?? raw.parent, raw.to_table ?? raw.target_table ?? raw.parent_table, raw.to_columns ?? raw.to_column ?? raw.target_column ?? raw.parent_column)
+  if (!from.table || !to.table || !from.columns.length || !to.columns.length) return undefined
+  const relation = { from, to }
+  for (const key of ['id', 'cardinality', 'confidence', 'evidence', 'id_system']) if (str(raw[key])) relation[key] = str(raw[key])
+  return relation
+}
+
+const HUB_NAME = /(master|members?|customers?|users?|accounts?)$/i
+
+export function inferRelationships(bundle) {
+  const names = new Map(bundle.glossary.id_systems.map((system) => [system.id, system.name]))
+  const groups = new Map()
+  for (const table of bundle.tables) {
+    for (const column of table.columns) {
+      if (!column.id_system) continue
+      const key = Boolean(column.is_primary_key || table.primary_key?.includes(column.name))
+      groups.set(column.id_system, [...(groups.get(column.id_system) ?? []), { table, column: column.name, key }])
+    }
+  }
+  const existing = new Set(bundle.relationships.flatMap((relation) => [`${relation.from.table}|${relation.to.table}`, `${relation.to.table}|${relation.from.table}`]))
+  const joined = new Set(bundle.relationships.flatMap((relation) => [relation.from, relation.to].flatMap((end) => end.columns.map((column) => `${end.table}.${column}`))))
+  const score = (item) => (item.key ? 8 : 0) + (item.table.kind === 'master' ? 4 : 0) + (HUB_NAME.test(item.table.name) ? 2 : 0) + (item.table.kind === 'source' ? 1 : 0)
+  const inferred = []
+  for (const [system, members] of groups) {
+    if (new Set(members.map((member) => tableKey(member.table))).size < 2) continue
+    const hub = [...members].sort((a, b) => score(b) - score(a) || tableKey(a.table).localeCompare(tableKey(b.table)))[0]
+    const hubKey = tableKey(hub.table)
+    for (const member of members) {
+      const key = tableKey(member.table)
+      // A column that already takes part in a registered relationship is covered.
+      if (key === hubKey || existing.has(`${key}|${hubKey}`) || joined.has(`${key}.${member.column}`)) continue
+      existing.add(`${key}|${hubKey}`)
+      existing.add(`${hubKey}|${key}`)
+      inferred.push({
+        from: { table: key, columns: [member.column] },
+        to: { table: hubKey, columns: [hub.column] },
+        cardinality: member.key && hub.key ? 'one-to-one' : 'many-to-one',
+        confidence: 'inferred',
+        evidence: `ID体系「${names.get(system) ?? system}」が一致（自動推定・一致率未検証）`,
+        id_system: system,
+      })
+    }
+  }
+  return inferred
+}
+
+export function matchRateSql(relation, bundle) {
+  const hasTime = (key) => bundle.tables.find((table) => tableKey(table) === key)?.columns.some((column) => column.name === 'time')
+  const a = relation.from
+  const b = relation.to
+  return `WITH a AS (
+  SELECT DISTINCT CAST(${a.columns[0]} AS varchar) AS v
+  FROM ${a.table}
+  WHERE ${hasTime(a.table) ? "td_interval(time, '-30d') AND " : ''}${a.columns[0]} IS NOT NULL
+  LIMIT 100000
+),
+b AS (
+  SELECT DISTINCT CAST(${b.columns[0]} AS varchar) AS v
+  FROM ${b.table}
+  WHERE ${b.columns[0]} IS NOT NULL
+)
+SELECT COUNT(*) AS sampled, COUNT(b.v) AS matched,
+       ROUND(100.0 * COUNT(b.v) / NULLIF(COUNT(*), 0), 1) AS match_pct
+FROM a LEFT JOIN b ON a.v = b.v`
+}
+
 export function normalizeBundle(value) {
   return {
     catalog: value.catalog,
     tables: arr(value.tables).map((table) => ({ ...table, columns: arr(table.columns) })).sort((a, b) => tableKey(a).localeCompare(tableKey(b))),
     lineage: { nodes: arr(value.lineage?.nodes), edges: arr(value.lineage?.edges) },
-    relationships: arr(value.relationships),
+    relationships: arr(value.relationships).map(normalizeRelationship).filter(Boolean),
     glossary: {
       terms: arr(value.glossary?.terms),
       id_systems: arr(value.glossary?.id_systems),
@@ -77,7 +176,7 @@ export function readCatalogDir(dir) {
     catalog: readJson(join(dir, 'catalog.json')),
     tables,
     lineage: optional('lineage.json'),
-    relationships: optional('relationships.json')?.relationships,
+    relationships: relationshipItems(optional('relationships.json')),
     glossary: optional('glossary.json'),
     assets: optional('assets.json'),
   })
@@ -164,6 +263,12 @@ export function lintBundle(bundle) {
       if (!columns.has(end?.table)) { push('warning', 'relationships.json', `未登録テーブル "${end?.table}"`); continue }
       for (const column of arr(end.columns)) if (!columns.get(end.table).has(column)) push('warning', 'relationships.json', `"${end.table}" にカラム "${column}" がありません`)
     }
+  }
+  if (!bundle.relationships.length) {
+    const candidates = inferRelationships(bundle).length
+    push(candidates ? 'warning' : 'info', 'relationships.json', candidates
+      ? `リレーションが空です。ID体系から ${candidates} 件の候補があります（catalog-cli.mjs relationships で候補と検証 SQL を出力）`
+      : 'リレーションが空です。カラムに id_system を付けるか、JOIN 条件からリレーションを作成してください')
   }
   const recipeIds = new Set()
   for (const recipe of bundle.glossary.recipes) {
@@ -604,6 +709,23 @@ function copyTree(source, target, filter) {
   }
 }
 
+function cmdRelationships(dir, flags) {
+  const bundle = readCatalogDir(dir)
+  const raw = relationshipItems(existsSync(join(dir, 'relationships.json')) ? readJson(join(dir, 'relationships.json')) : [])
+  if (raw.length > bundle.relationships.length) console.log(`注意: relationships.json の ${raw.length - bundle.relationships.length} 件は形式を読み取れません（from/to の table と columns が必要）`)
+  const candidates = inferRelationships(bundle)
+  console.log(`登録済み ${bundle.relationships.length} 件 / ID体系からの候補 ${candidates.length} 件\n`)
+  candidates.forEach((relation, index) => {
+    console.log(`-- [${index + 1}] ${relation.from.table}.${relation.from.columns[0]} → ${relation.to.table}.${relation.to.columns[0]}（${relation.evidence}）`)
+    console.log(`${matchRateSql(relation, bundle)};\n`)
+  })
+  if (flags.write && candidates.length) {
+    // Rewrite in the canonical shape, keeping existing entries first.
+    writeJson(join(dir, 'relationships.json'), { relationships: [...bundle.relationships, ...candidates] })
+    console.log(`relationships.json に ${candidates.length} 件を confidence: inferred で追加しました。一致率を確認したら evidence と confidence を更新してください。`)
+  }
+}
+
 function cmdSkill(dir, flags) {
   if (!flags.out) throw new Error('--out が必要です（skills ディレクトリ、または生成する skill のディレクトリ）')
   const bundle = readCatalogDir(dir)
@@ -651,9 +773,10 @@ export function main(argv) {
     case 'diff': return cmdDiff(positional[0], flags)
     case 'pack': return cmdPack(positional[0], flags)
     case 'unpack': return cmdUnpack(positional[0], positional[1])
+    case 'relationships': return cmdRelationships(positional[0], flags)
     case 'skill': return cmdSkill(positional[0], flags)
     default:
-      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 12).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
+      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split("\n").slice(1, 13).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
       if (command && command !== 'help') process.exitCode = 1
   }
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ErDiagram } from '../components/ErDiagram'
 import { LineageGraph, NODE_TYPE_LABEL } from '../components/LineageGraph'
 import { tableKey } from '../core/load'
+import { inferRelationships } from '../core/relations'
 import { href, navigate, type Route } from '../router'
 import type { LineageNodeType, LoadedCatalog } from '../types/catalog'
 
@@ -72,6 +73,10 @@ export function ErView({ catalog, route }: { catalog: LoadedCatalog; route: Rout
   const focus = route.params.get('focus') ?? undefined
   const [showIsolated, setShowIsolated] = useState(false)
   const [showAllColumns, setShowAllColumns] = useState(false)
+  const explicit = catalog.relationships
+  const [includeInferred, setIncludeInferred] = useState(explicit.length === 0)
+  const inferred = useMemo(() => inferRelationships(catalog), [catalog])
+  const relationships = useMemo(() => (includeInferred ? [...explicit, ...inferred] : explicit), [explicit, inferred, includeInferred])
   return (
     <div className="graph-page">
       <div className="toolbar">
@@ -86,6 +91,11 @@ export function ErView({ catalog, route }: { catalog: LoadedCatalog; route: Rout
           <input type="checkbox" checked={showIsolated} onChange={(event) => setShowIsolated(event.target.checked)} disabled={Boolean(focus)} />
           リレーションのないテーブルも表示
         </label>
+        <label className="check" title="同じID体系のカラムを持つテーブル同士を、一致率を検証していない推定リレーションとして点線で表示します">
+          <input type="checkbox" checked={includeInferred} onChange={(event) => setIncludeInferred(event.target.checked)} disabled={inferred.length === 0} />
+          ID体系から推定したリレーションも表示（{inferred.length}）
+        </label>
+        <span className="muted small">登録済み {explicit.length} 件</span>
         <label className="check">
           <input type="checkbox" checked={showAllColumns} onChange={(event) => setShowAllColumns(event.target.checked)} />
           全カラムを表示
@@ -93,7 +103,7 @@ export function ErView({ catalog, route }: { catalog: LoadedCatalog; route: Rout
         {focus && <a className="button ghost small" href={href('tables', focus, { tab: 'schema' })}>テーブル詳細</a>}
       </div>
       <div className="graph-frame full">
-        <ErDiagram tables={catalog.tables} relationships={catalog.relationships} focus={focus} showIsolated={showIsolated} showAllColumns={showAllColumns} />
+        <ErDiagram tables={catalog.tables} relationships={relationships} focus={focus} showIsolated={showIsolated} showAllColumns={showAllColumns} />
       </div>
       <p className="legend">矢印は参照される側（親）→ 参照する側（子）。PK = 主キー、FK = 結合キー、点線は推定のリレーションです。テーブルをクリックするとそのテーブルを中心に表示します。</p>
     </div>

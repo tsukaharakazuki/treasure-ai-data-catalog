@@ -8,8 +8,11 @@ import { loadCatalogFromFiles, CatalogLoadError } from '../src/core/load.ts'
 import { diffCatalogs } from '../src/core/diff.ts'
 import { buildLineageView, neighbours, processesTouching } from '../src/core/lineage.ts'
 import { searchCatalog, searchColumns, tableMatches } from '../src/core/search.ts'
+import { inferRelationships as inferViewer, normalizeRelationship, relationshipItems } from '../src/core/relations.ts'
 import {
   diffBundles,
+  inferRelationships as inferCli,
+  normalizeRelationship as normalizeCli,
   lintBundle,
   main,
   normalizeBundle,
@@ -153,4 +156,44 @@ test('column explorer lists matching columns across tables with AND terms and fi
   assert.ok(both.length > 0 && both.every((row) => row.tableKey.includes('shopify')))
   assert.ok(searchColumns(catalog, '', { idSystem: 'point_card_no' }).length === 2)
   assert.ok(tableMatches(catalog.tables.find((table) => table.name === 'orders_unified'), '統合 会員'))
+})
+
+test('relationship variants an LLM may write are normalized the same in viewer and CLI', () => {
+  const variants = [
+    { from: { table: 'raw_ec.a', columns: ['x'] }, to: { table: 'raw_ec.b', columns: ['y'] } },
+    { from: { database: 'raw_ec', table: 'a', column: 'x' }, to: { database: 'raw_ec', table: 'b', column: 'y' } },
+    { from_table: 'raw_ec.a', from_column: 'x', to_table: 'raw_ec.b', to_column: 'y' },
+    { from: 'raw_ec.a.x', to: 'raw_ec.b.y' },
+    { source: { table: 'raw_ec.a', columns: 'x' }, target: { table: 'raw_ec.b', columns: ['y'] } },
+  ]
+  for (const variant of variants) {
+    const expected = { from: { table: 'raw_ec.a', columns: ['x'] }, to: { table: 'raw_ec.b', columns: ['y'] } }
+    assert.deepEqual(normalizeRelationship(variant), expected)
+    assert.deepEqual(normalizeCli(variant), expected)
+  }
+  assert.equal(normalizeRelationship({ from: 'raw_ec.a' }), undefined)
+  assert.equal(relationshipItems([1, 2]).length, 2)
+  assert.equal(relationshipItems({ relations: [1] }).length, 1)
+})
+
+test('relationships are inferred from shared ID systems when none are registered', () => {
+  const catalog = loadCatalogFromFiles(sampleFiles())
+  const empty = { ...catalog, relationships: [] }
+  const viewer = inferViewer(empty)
+  assert.deepEqual(viewer, inferCli(normalizeBundle(empty)))
+  // member_id hub is the table where it is the primary key.
+  const member = viewer.filter((relation) => relation.id_system === 'member_id')
+  assert.ok(member.length >= 3)
+  assert.ok(member.every((relation) => relation.to.table === member[0].to.table))
+  assert.ok(viewer.every((relation) => relation.confidence === 'inferred'))
+  // Already registered pairs are not suggested again.
+  assert.ok(!inferViewer(catalog).some((relation) => relation.from.table === 'raw_ec.web_pageviews' && relation.to.table === 'raw_ec.crm_members'))
+
+  const files = sampleFiles()
+  const root = [...files.keys()][0].split('/')[0]
+  files.set(`${root}/relationships.json`, JSON.stringify([{ from_table: 'shopify_order_items', from_column: 'order_id', to_table: 'raw_ec.shopify_orders', to_column: 'order_id' }, { broken: true }]))
+  const loaded = loadCatalogFromFiles(files)
+  assert.equal(loaded.relationships.length, 1)
+  assert.equal(loaded.relationships[0].from.table, 'raw_ec.shopify_order_items')
+  assert.ok(loaded.diagnostics.some((item) => item.message.includes('1 件のリレーションを読み取れません')))
 })

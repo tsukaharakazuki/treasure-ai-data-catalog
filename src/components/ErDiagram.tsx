@@ -133,7 +133,16 @@ export function ErDiagram({ tables, relationships, focus, showIsolated, showAllC
     return { nodes: flowNodes, edges: flowEdges }
   }, [tables, relationships, focus, showIsolated, showAllColumns])
 
-  if (!nodes.length) return <div className="empty">表示できるリレーションがありません。relationships.json を確認してください。</div>
+  if (!nodes.length) {
+    return (
+      <div className="empty">
+        表示できるリレーションがありません。
+        {relationships.length > 0
+          ? ' relationships.json のテーブル名がカタログのテーブル（database.table）と一致しているか確認してください。'
+          : ' relationships.json が空です。カラムに ID体系（id_system）を設定するか、builder SKILL の更新モードでリレーションを作成してください。'}
+      </div>
+    )
+  }
 
   return (
     <div className="graph-wrapper" style={{ height: '100%' }}>

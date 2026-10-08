@@ -101,7 +101,12 @@ Parent Segment を TD コンソールの URL で指定された場合、URL の�
 ### 7. リネージと ER
 
 - リネージ: 手順 4 の結果から `lineage.json` を作る。ノード ID は `table:<db>.<table>` / `source:<id>` / `workflow:<project>.<workflow>` / `saved_query:<name>` / `parent_segment:<id>` / `activation:<id>` / `external:<id>`。テーブル中心に、Source → テーブル → Workflow/Saved Query → テーブル → `customers` / `behavior_*` → Parent Segment の向きで張る（Parent Segment の元テーブルは出力テーブルを経由させ、Parent Segment へ直接つながない）。`${...}` を解決できなかった参照は `confidence: unresolved`。
-- ER: Workflow / Saved Query の JOIN 条件、Parent Segment の結合キー、ID体系の一致から `relationships.json` を作る。一致率クエリ（`references/collection-playbook.md`）で裏付けを取り、`evidence` に一致率を書く。裏付けが無いものは `confidence: inferred`。
+- ER（`relationships.json`）は **必ず作る**。0 件のまま次へ進まない。
+  1. 候補を集める: Workflow / Saved Query の SQL の JOIN 条件（`ON a.x = b.y`）、Parent Segment 構成ファイルの結合キー（マスター ↔ 属性・ビヘイビアの元テーブル）、`behavior_*.cdp_customer_id → customers.cdp_customer_id`。
+  2. ID体系からも候補を出す: `node $SKILL/scripts/catalog-cli.mjs relationships data-catalog/catalog`。同じ `id_system` のカラム同士の候補と、一致率を測る SQL が出力される（`--write` で `confidence: inferred` として追記）。
+  3. 各候補の一致率 SQL を `tdx query` で実行し、`evidence` に一致率を書く。90% 以上かつ JOIN 定義があれば `confirmed`、50〜90% は `inferred`、50% 未満は登録しない（別体系の可能性としてユーザーに確認）。
+  4. 書き方は `references/catalog-format.md` の形を厳守する: `{ "relationships": [ { "from": { "table": "<db>.<table>", "columns": ["<col>"] }, "to": { ... }, ... } ] }`。`table` は `tables/` に登録した `<db>.<table>` と完全一致させ、`columns` は配列にする。
+  5. `validate` で relationships.json の warning（未登録テーブル・存在しないカラム・空）が無いことを確かめる。どうしても 0 件なら理由（ID 列が無い、権限が無いなど）を報告に書く。
 
 ### 8. サンプルクエリと処理事例
 

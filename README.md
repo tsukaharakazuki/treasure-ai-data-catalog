@@ -53,6 +53,7 @@ node scripts/catalog-cli.mjs release  data-catalog/catalog --note "初版"
 node scripts/catalog-cli.mjs diff     data-catalog/catalog --from r0001 --to current
 node scripts/catalog-cli.mjs pack     data-catalog/catalog --out acme-data-catalog-r0001.zip
 node scripts/catalog-cli.mjs unpack   acme-data-catalog-r0001.zip data-catalog/catalog
+node scripts/catalog-cli.mjs relationships data-catalog/catalog   # ID体系から ER 候補と一致率 SQL
 node scripts/catalog-cli.mjs skill    data-catalog/catalog --out ~/.treasure-work/.claude/skills --zip acme-data-catalog-skill.zip
 ```
 

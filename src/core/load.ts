@@ -1,4 +1,5 @@
 import { CATALOG_FORMAT, CATALOG_VERSION } from '../types/catalog.ts'
+import { inferRelationships, normalizeRelationship, relationshipItems, resolveTableKeys } from './relations.ts'
 import type {
   Assets,
   CatalogBundle,
@@ -88,7 +89,7 @@ export function normalizeBundle(value: Partial<CatalogBundle>): CatalogBundle {
     catalog: value.catalog as CatalogManifest,
     tables: asArray<CatalogTable>(value.tables).map(normalizeTable).sort(compareTables),
     lineage: normalizeLineage(value.lineage),
-    relationships: asArray<Relationship>(value.relationships),
+    relationships: asArray(value.relationships).map(normalizeRelationship).filter((item): item is Relationship => Boolean(item)),
     glossary: normalizeGlossary(value.glossary),
     assets: normalizeAssets(value.assets),
   }
@@ -152,6 +153,12 @@ export function lintBundle(bundle: CatalogBundle): CatalogDiagnostic[] {
       }
     }
   }
+  if (bundle.relationships.length === 0) {
+    const candidates = inferRelationships(bundle).length
+    if (candidates) {
+      diagnostics.push({ severity: 'warning', path: 'relationships.json', message: `リレーションが登録されていません。ID体系から ${candidates} 件の候補を推定できます（ER図で「ID体系から推定」を表示）。` })
+    }
+  }
   for (const recipe of bundle.glossary.recipes) {
     for (const variant of recipe.variants) {
       if (!tables.has(variant.table)) {
@@ -190,12 +197,21 @@ export function loadCatalogFromFiles(input: Map<string, string>): LoadedCatalog 
     return text === undefined ? undefined : parseJson<T>(text, path, diagnostics)
   }
 
-  const relationshipsFile = optional<{ relationships?: Relationship[] }>('relationships.json')
+  const relationshipsFile = optional<unknown>('relationships.json')
+  const rawRelations = relationshipItems(relationshipsFile)
+  const relations = rawRelations.map(normalizeRelationship).filter((item): item is Relationship => Boolean(item))
+  if (relations.length < rawRelations.length) {
+    diagnostics.push({
+      severity: 'warning',
+      path: 'relationships.json',
+      message: `${rawRelations.length - relations.length} 件のリレーションを読み取れませんでした（from / to の table と columns が必要です）。`,
+    })
+  }
   const bundle = normalizeBundle({
     catalog: manifest,
     tables,
     lineage: optional<Lineage>('lineage.json'),
-    relationships: relationshipsFile?.relationships,
+    relationships: resolveTableKeys(relations, tables),
     glossary: optional<Glossary>('glossary.json'),
     assets: optional<Assets>('assets.json'),
   })
