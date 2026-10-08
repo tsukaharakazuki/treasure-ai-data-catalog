@@ -1299,6 +1299,12 @@ code.expression {
   overflow-wrap: anywhere;
 }
 
+/* Types are short and must stay on one line (array(varchar) etc. included). */
+.data-table td code.type {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
 /* ---------- Revisions ---------- */
 .diff-list,
 .column-changes,
