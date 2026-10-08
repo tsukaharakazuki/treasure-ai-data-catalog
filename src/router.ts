@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-export type Section = 'overview' | 'tables' | 'lineage' | 'er' | 'glossary' | 'ids' | 'assets' | 'revisions'
+export type Section = 'overview' | 'tables' | 'explore' | 'lineage' | 'er' | 'glossary' | 'ids' | 'assets' | 'revisions'
 
 export interface Route {
   section: Section
@@ -9,7 +9,7 @@ export interface Route {
   params: URLSearchParams
 }
 
-const SECTIONS: readonly Section[] = ['overview', 'tables', 'lineage', 'er', 'glossary', 'ids', 'assets', 'revisions']
+const SECTIONS: readonly Section[] = ['overview', 'tables', 'explore', 'lineage', 'er', 'glossary', 'ids', 'assets', 'revisions']
 
 export function parseHash(hash: string): Route {
   const raw = hash.replace(/^#\/?/, '')

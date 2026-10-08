@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { loadCatalogFromFiles, CatalogLoadError } from '../src/core/load.ts'
 import { diffCatalogs } from '../src/core/diff.ts'
 import { buildLineageView, neighbours, processesTouching } from '../src/core/lineage.ts'
-import { searchCatalog, tableMatches } from '../src/core/search.ts'
+import { searchCatalog, searchColumns, tableMatches } from '../src/core/search.ts'
 import {
   diffBundles,
   lintBundle,
@@ -137,4 +137,20 @@ test('release refuses to create an empty revision and unpack restores a catalog'
   main(['release', dir, '--note', 'no-op'])
   const index = JSON.parse(readFileSync(join(dir, 'revisions/index.json'), 'utf8'))
   assert.equal(index.revisions.length, 2)
+})
+
+test('column explorer lists matching columns across tables with AND terms and filters', () => {
+  const catalog = loadCatalogFromFiles(sampleFiles())
+  const rows = searchColumns(catalog, '統合会員ID')
+  const keys = new Set(rows.map((row) => row.tableKey))
+  assert.ok(keys.size >= 4)
+  // Every member_id column, plus columns whose description mentions it.
+  assert.equal(rows.filter((row) => row.column.id_system === 'member_id').length, 5)
+  assert.ok(rows.find((row) => row.column.name === 'customer_id')?.matchedBy.includes('description'))
+  // ID system names match even when the column's own logical name differs.
+  assert.ok(searchColumns(catalog, 'ポイントカード').some((row) => row.column.name === 'member_card_no'))
+  const both = searchColumns(catalog, '会員 shopify')
+  assert.ok(both.length > 0 && both.every((row) => row.tableKey.includes('shopify')))
+  assert.ok(searchColumns(catalog, '', { idSystem: 'point_card_no' }).length === 2)
+  assert.ok(tableMatches(catalog.tables.find((table) => table.name === 'orders_unified'), '統合 会員'))
 })

@@ -865,6 +865,84 @@ a.kpi:hover {
   overflow: auto;
 }
 
+/* ---------- Explore ---------- */
+.explore-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.explore-input {
+  flex: 1;
+  min-width: 280px;
+  padding: 10px 14px;
+  font-size: 15px;
+}
+
+.explore-examples,
+.explore-tables {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.explore-examples .chip,
+.explore-tables .chip {
+  margin: 0;
+  cursor: pointer;
+}
+
+.chip .count {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-tint);
+  color: var(--primary-1);
+  font-size: 11px;
+}
+
+.explore-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.explore-table-name {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+}
+
+.explore-table-name strong {
+  color: var(--ink);
+}
+
+.explore-table-name code {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.explore-desc {
+  min-width: 220px;
+  color: #3f3d4d;
+}
+
+.explore-link {
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.search-explore a {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary-1) !important;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
 /* ---------- Graphs ---------- */
 .graph-page {
   display: flex;

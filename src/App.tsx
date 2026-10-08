@@ -10,6 +10,7 @@ import { TablesView } from './views/TablesView'
 import { ErView, LineageView } from './views/GraphViews'
 import { AssetsView, GlossaryView, IdSystemsView } from './views/GlossaryViews'
 import { RevisionsView } from './views/RevisionsView'
+import { ExploreView } from './views/ExploreView'
 import type { LoadedCatalog } from './types/catalog'
 import './App.css'
 
@@ -19,6 +20,7 @@ const SESSION_LIMIT = 4_000_000
 const NAV: { id: Section; label: string; icon: typeof Database }[] = [
   { id: 'overview', label: '概要', icon: FolderTree },
   { id: 'tables', label: 'テーブル', icon: Table2 },
+  { id: 'explore', label: 'テーブル探索', icon: Search },
   { id: 'lineage', label: 'データリネージ', icon: Network },
   { id: 'er', label: 'ER図', icon: GitFork },
   { id: 'glossary', label: '用語・処理事例', icon: BookOpen },
@@ -127,6 +129,7 @@ export default function App() {
         <main className="content">
           {route.section === 'overview' && <Overview catalog={catalog} />}
           {route.section === 'tables' && <TablesView catalog={catalog} route={route} />}
+          {route.section === 'explore' && <ExploreView key={route.params.get('q') ?? ''} catalog={catalog} route={route} />}
           {route.section === 'lineage' && <LineageView catalog={catalog} route={route} />}
           {route.section === 'er' && <ErView catalog={catalog} route={route} />}
           {route.section === 'glossary' && <GlossaryView key={route.id ?? route.params.get('term') ?? ''} catalog={catalog} route={route} />}
@@ -178,6 +181,11 @@ function GlobalSearch({ catalog }: { catalog: LoadedCatalog }) {
       </label>
       {openList && query && (
         <ul className="search-results">
+          <li className="search-explore">
+            <a href={href('explore', undefined, { q: query })} onClick={() => setOpenList(false)}>
+              <Search size={13} /> 「{query}」を全テーブルのカラムから探す（テーブル探索）
+            </a>
+          </li>
           {hits.length === 0 && <li className="muted pad">見つかりません</li>}
           {hits.map((hit) => (
             <li key={`${hit.kind}:${hit.key}:${hit.column ?? ''}`}>

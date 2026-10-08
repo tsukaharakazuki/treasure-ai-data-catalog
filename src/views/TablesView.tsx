@@ -31,9 +31,10 @@ export function TablesView({ catalog, route }: { catalog: LoadedCatalog; route: 
   const [query, setQuery] = useState('')
   const database = route.params.get('db') ?? ''
   const databases = useMemo(() => [...new Set(catalog.tables.map((table) => table.database))], [catalog])
+  const idSystemNames = useMemo(() => new Map(catalog.glossary.id_systems.map((system) => [system.id, system.name])), [catalog])
   const filtered = useMemo(
-    () => catalog.tables.filter((table) => (!database || table.database === database) && tableMatches(table, query)),
-    [catalog, database, query],
+    () => catalog.tables.filter((table) => (!database || table.database === database) && tableMatches(table, query, idSystemNames)),
+    [catalog, database, query, idSystemNames],
   )
   const selected = catalog.tables.find((table) => tableKey(table) === route.id)
 
@@ -49,6 +50,12 @@ export function TablesView({ catalog, route }: { catalog: LoadedCatalog; route: 
             <option value="">すべてのDB</option>
             {databases.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
+          {query.trim() && (
+            <a className="explore-link" href={href('explore', undefined, { q: query })}>
+              「{query}」に一致するカラムを横断表示 →
+            </a>
+          )}
+          <span className="muted small">{filtered.length} / {catalog.tables.length} テーブル</span>
         </div>
         <ul className="table-list">
           {filtered.map((table) => {
