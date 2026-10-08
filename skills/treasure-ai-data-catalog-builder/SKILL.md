@@ -37,7 +37,7 @@ Treasure Data の Parent Segment / Workflow / Saved Query / Source / データ�
 
 1. **カタログの起点**（複数選択可）: Parent Segment（Audience Studio）/ Workflow プロジェクト / Saved Query / Source（データコネクタ取込）/ データベース指定
 2. **対象の名前、または TD コンソールの URL**（複数可）。例: Parent Segment 名、Workflow プロジェクト名、`https://console.treasuredata.com/...` の URL。**Parent Segment は URL だけでは特定できないので、名前も一緒に聞く**
-3. **サンプルデータ**: 含める（マスク済み・各テーブル3行、既定）/ 含めない
+3. **サンプルデータ**: 含める（マスク済み・各テーブル10行、既定）/ 含めない
 4. **論理名・説明の言語**: 既定はユーザーの言語（日本語なら `ja`）
 5. **社内用語や、よく出る集計指示**があれば（例: 「売上」「購入者数」「アクティブ会員」の定義）。後でも構わないと伝える
 
@@ -82,7 +82,7 @@ Parent Segment を TD コンソールの URL で指定された場合、URL の�
 1. スキーマ（information_schema または `tdx describe <db>.<table> --json`）
 2. 行数・最終更新（取得できる場合のみ）
 3. ID 候補・コード値候補カラムの軽量プロファイル（桁数・形式・NULL 率・値の種類）
-4. マスク付きサンプル（含める場合のみ、3行）
+4. マスク付きサンプル（含める場合のみ、10行。`LIMIT 10`）
 5. 論理名・説明・利用用途を `references/metadata-rules.md` に従って作成
 
 書き出しは `tables/<database>/<table>.json`（形式は `references/catalog-format.md`）。
@@ -138,7 +138,7 @@ node $SKILL/scripts/catalog-cli.mjs skill    data-catalog/catalog --out <skills 
 ## 更新モード
 
 1. 前回の ZIP を展開する: `node $SKILL/scripts/catalog-cli.mjs unpack <前回.zip> data-catalog/catalog`
-2. `catalog.json` の `scope` に記録された対象で、手順 4〜8 を再実行する。
+2. `catalog.json` の `scope` に記録された対象で、手順 4〜8 を再実行する。以前の版で作ったカタログの `privacy.sample_rows_max` が 10 未満なら 10 に上げ、サンプルを 10 行で取り直す。
 3. **人が確定した情報を消さない**:
    - `logical_name_status: confirmed` の論理名・説明・`id_system`・`values` は、カラムの型が変わっていない限り引き継ぐ
    - 用語・処理事例・業務ルール・ID体系はユーザーの指示なく削除しない

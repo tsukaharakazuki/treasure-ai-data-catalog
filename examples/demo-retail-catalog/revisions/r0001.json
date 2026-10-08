@@ -39,7 +39,7 @@
       "inputs": []
     },
     "privacy": {
-      "sample_rows_max": 5,
+      "sample_rows_max": 10,
       "masking_policy": "氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする"
     },
     "description": "架空の小売企業を想定した合成サンプルです。実在の企業・人物・値は含みません。"

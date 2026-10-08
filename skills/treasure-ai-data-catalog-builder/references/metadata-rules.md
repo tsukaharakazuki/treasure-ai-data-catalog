@@ -101,7 +101,7 @@ Parent Segment に日本語の表示名や名前変換の指示が設定され�
 | 除外 | `NULL AS c` | — |
 | array / map / json | `CASE WHEN c IS NULL THEN NULL ELSE '[masked]' END AS c`（中身が安全と分かるものを除く） | — |
 
-- 行数は `privacy.sample_rows_max`（既定 5、推奨 3）以下
+- 行数は **10 行**（`privacy.sample_rows_max` の既定 10。上限もこの値）。テーブルの行数が 10 未満ならある分だけ
 - `samples.masked_columns` にマスクしたカラム名を列挙する
 - ユーザーが「サンプルを含めない」を選んだら `samples` を省略する
 

@@ -97,10 +97,10 @@ test('lint flags unmasked personal samples and too many rows', () => {
   const bundle = readCatalogDir(SAMPLE_DIR)
   const crm = bundle.tables.find((table) => table.name === 'crm_members')
   crm.samples.rows[0].email = 'taro@example.com'
-  crm.samples.rows.push(...Array.from({ length: 5 }, () => ({})))
+  crm.samples.rows.push(...Array.from({ length: 10 }, () => ({})))
   const errors = lintBundle(bundle).filter((issue) => issue.severity === 'error').map((issue) => issue.message)
   assert.ok(errors.some((message) => message.includes('マスクされていません')))
-  assert.ok(errors.some((message) => message.includes('5 行まで')))
+  assert.ok(errors.some((message) => message.includes('10 行まで')))
 })
 
 test('zip round-trips UTF-8 names and content', () => {

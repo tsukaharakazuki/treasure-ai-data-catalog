@@ -229,7 +229,7 @@ FROM a LEFT JOIN b ON a.v = b.v
 SELECT <マスク式を含む列リスト>
 FROM <db>.<table>
 WHERE td_interval(time, '-7d')
-LIMIT 3
+LIMIT 10
 ```
 
 ### サンプルクエリの検証

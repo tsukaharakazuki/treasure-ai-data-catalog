@@ -114,7 +114,7 @@ export function lintBundle(bundle) {
   if (!c.name || !/^[a-z0-9][a-z0-9-]*$/.test(c.name)) push('error', 'catalog.json', 'name は英小文字・数字・ハイフンのスラッグにしてください（SKILL名 <name>-data-catalog に使います）')
   if (!c.language) push('warning', 'catalog.json', 'language がありません（例: ja）')
 
-  const maxRows = c.privacy?.sample_rows_max ?? 5
+  const maxRows = c.privacy?.sample_rows_max ?? 10
   const keys = new Set()
   const columns = new Map()
   const idSystems = new Set(bundle.glossary.id_systems.map((system) => system.id))
@@ -501,7 +501,7 @@ function cmdInit(dir, flags) {
     revision: { id: 'draft', number: 0, generated_at: nowIso(), generated_by: 'Treasure AI Studio' },
     td: { site },
     scope: { databases: [], parent_segments: [], workflow_projects: [], saved_queries: [], sources: [], inputs: [] },
-    privacy: { sample_rows_max: 5, masking_policy: '氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする' },
+    privacy: { sample_rows_max: 10, masking_policy: '氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする' },
   })
   writeJson(join(dir, 'lineage.json'), { nodes: [], edges: [] })
   writeJson(join(dir, 'relationships.json'), { relationships: [] })

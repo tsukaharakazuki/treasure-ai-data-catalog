@@ -43,7 +43,7 @@ catalog/
     "sources": ["shopify_daily_import"],
     "inputs": ["https://console.treasuredata.com/..."]
   },
-  "privacy": { "sample_rows_max": 5, "masking_policy": "氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする" },
+  "privacy": { "sample_rows_max": 10, "masking_policy": "氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする" },
   "description": "任意の説明"
 }
 ```
@@ -56,7 +56,7 @@ catalog/
 | `language` | ○ | 論理名・説明の言語（BCP 47） |
 | `revision` | ○ | `release` が更新する。初期値は `{ "id": "draft", "number": 0 }` |
 | `scope` | | 収集の起点。更新モードはこの範囲を再収集する |
-| `privacy.sample_rows_max` | | サンプル行数の上限（既定 5）。validate が検査する |
+| `privacy.sample_rows_max` | | サンプル行数（既定 10。取得行数もこの値）。validate が検査する |
 
 ## tables/&lt;database&gt;/&lt;table&gt;.json
 
