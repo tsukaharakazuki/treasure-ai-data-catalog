@@ -47,9 +47,9 @@ tdx ps pull "<name>"                         # 設定を YAML に保存（ロー
 YAML から取り出すもの:
 
 - マスターテーブル（`db.table`）と主キー
-- 属性: 元テーブル・元カラム・**表示名**・結合キー → カラムの `logical_name`（`confirmed`）とリレーション
-- ビヘイビア: 元テーブル・結合キー・表示名 → リネージ（テーブル → `parent_segment:<id>`）とリレーション
-- 出力 DB（`cdp_audience_<id>`）→ `parent_segment:<id>` → `table:cdp_audience_<id>.customers` などのエッジ
+- 属性: 元テーブル・元カラム・**表示名**・結合キー → 論理名の判断材料（`inferred`。`metadata-rules.md` の「Parent Segment の表示名」）とリレーション
+- ビヘイビア: 元テーブル・結合キー・表示名 → リネージ（元テーブル → `parent_segment:<id>` → `behavior_<元テーブル名>`）とリレーション
+- 出力 DB（`cdp_audience_<id>`）の `customers` と `behavior_*`（下記「出力テーブル」）
 
 ### Parent Segment の元データ（必須）
 
@@ -66,12 +66,29 @@ Parent Segment が起点に指定されたら、**Parent Segment 用に作られ
    tdx wf timeline --attempt-id <attempt-id>                # 任意。タスクの流れの確認
    ```
 
-   ログ中の SQL の `FROM` / `JOIN` から、`cdp_audience_<id>` 以外の DB のテーブルを元データとして拾う。`cdp_audience_<id>` 内の中間テーブルは `kind: temporary` とし、カタログには載せなくてよい（リネージ上は `parent_segment:<id>` にまとめる）。
+   ログ中の SQL の `FROM` / `JOIN` から、`cdp_audience_<id>` 以外の DB のテーブルを元データとして拾う。
    - `attempt ... kill` / `retry`、`wf retry`、`ps run` は実行しない。
    - ログの全文はカタログに保存しない（必要なテーブル名・結合条件だけ取り出す）。ログに値が出ていても転記しない。
 4. 元テーブルを対象テーブルに加え、スキーマ・論理名・サンプルなどを他のテーブルと同じ手順で作る。さらにその元テーブルの上流（Source・Workflow）へ 1 ホップ広げる。
 5. リネージは `table:<元テーブル> → parent_segment:<id>`（type `feeds`）。根拠を `note` に書く（例: `ps pull の behaviors.orders` / `cdp_audience_1389723 attempt 123456 のログ`）。構成ファイルとログの両方で確認できたものは `exact`、片方だけなら `exact`（構成ファイル）または `inferred`（ログからの推定）。
 6. 構成ファイルとログで元テーブルが食い違う場合（構成変更後に未実行など）は、両方をユーザーに示して、どちらを正とするか確認する。
+
+### Parent Segment の出力テーブル（`cdp_audience_<id>`）
+
+出力 DB のうち、次の 2 種類は **カタログの対象にする**。
+
+| テーブル | 中身 | kind | 書き方 |
+| --- | --- | --- | --- |
+| `customers` | 属性（Attribute）に設定したテーブル群をマスターに結合し、**PIVOT して 1 顧客 1 行に集約** したもの | `segment_output` | 説明に「1行 = 1顧客（`cdp_customer_id`）」と属性の元テーブルを書く。各カラムの `description` に元の `<db>.<table>.<column>` を書き、元カラムの論理名・ID体系・コード値を引き継ぐ |
+| `behavior_<元テーブル名>` | ビヘイビア（Behavior）に設定したテーブルを `cdp_customer_id` 付きに **エンリッチ** したもの | `segment_output` | 説明に元テーブルとビヘイビア名を書く。カラムは元テーブルの論理名を引き継ぎ、追加された `cdp_customer_id` などを補う |
+
+- それ以外の `cdp_audience_<id>` 内の中間テーブル（作業用・一時テーブル）はカタログに個別に載せず、リネージ上は `parent_segment:<id>` にまとめる。
+- スキーマは `tdx ps desc "<name>"` か information_schema（`table_schema = 'cdp_audience_<id>'`）で取る。
+- リネージ:
+  - 属性の元テーブル → `parent_segment:<id>` → `table:cdp_audience_<id>.customers`
+  - ビヘイビアの元テーブル → `parent_segment:<id>` → `table:cdp_audience_<id>.behavior_<元テーブル名>`
+- ER: `behavior_*.cdp_customer_id` → `customers.cdp_customer_id`（many-to-one）。元テーブルとの対応は、構成ファイルの結合キーで `customers` / `behavior_*` と元テーブルを結ぶ。
+- 処理事例: Parent Segment の集計ビヘイビアやセグメント条件で使われる集計（例: 直近30日の購入金額）は、`behavior_*` テーブルを使う variant として `recipes` に書く。
 
 `tdx activations "<ps名>/<segment名>"` で Activation が分かる場合は `activation:` ノードを追加してよい（接続設定の中身は書かない）。
 

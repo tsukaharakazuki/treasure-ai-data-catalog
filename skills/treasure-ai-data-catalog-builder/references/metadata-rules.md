@@ -7,11 +7,20 @@
 | 順位 | 情報源 | `logical_name_status` |
 | --- | --- | --- |
 | 1 | ユーザーが確認・指定した名前 | `confirmed` |
-| 2 | Parent Segment の属性・ビヘイビアの表示名（`tdx ps fields` / `ps pull` の YAML） | `confirmed` |
-| 3 | TD に登録済みの説明・既存ドキュメント | `confirmed` |
+| 2 | TD に登録済みの説明・既存ドキュメント | `confirmed` |
+| 3 | Parent Segment の属性・ビヘイビアの表示名、日本語名・名前変換の設定（`tdx ps fields` / `ps pull` の YAML） | `inferred`（下記） |
 | 4 | Workflow / Saved Query の SQL の別名（`AS 売上`）・コメント | `inferred` |
 | 5 | カラム名・型・プロファイル（桁数・コード値）からの推定 | `inferred` |
 | — | 意味が複数考えられる、ID体系が未確定 | `needs_review` |
+
+### Parent Segment の表示名・名前変換の扱い
+
+Parent Segment に日本語の表示名や名前変換の指示が設定されていても、**人が手で入力したものなので正確とは限らない**。判断材料の一つとして使い、そのまま確定扱いにしない。
+
+- 表示名と、カラム名・型・値のプロファイル・元テーブルの説明・SQL の使われ方を突き合わせる。矛盾が無ければ表示名を採用し `inferred`、ユーザーが確認したら `confirmed`。
+- 矛盾がある（例: 表示名は「購入日」だが値が UNIX 秒の取込時刻、表示名は「会員ID」だが形式がブラウザID）場合は `needs_review` にし、説明に「Parent Segment の表示名は『○○』」と根拠を残して、ユーザーに確認する。
+- 表記ゆれ（「会員ＩＤ」「会員id」「会員番号」）や、同じ元カラムに別の表示名が付いているものは、カタログ側で正規化した名前（全テーブルで共通の論理名）を採用し、元の表示名は `description` に残す。
+- 正規化した結果を Parent Segment の設定に反映してほしいと依頼されたら、SKILL.md の「Parent Segment への反映モード」に従う。
 
 ### 書き方
 

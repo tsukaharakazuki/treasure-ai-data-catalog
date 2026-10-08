@@ -1,6 +1,6 @@
 ---
 name: treasure-ai-data-catalog-builder
-description: "Treasure Data 環境のデータカタログを tdx の読み取り専用コマンドで作成・定期更新し、ビューアー（Treasure AI Data Catalog）で開ける ZIP と、誰でも使える <name>-data-catalog SKILL を生成する。メタデータ（スキーマ・利用者の言語での論理名・説明・利用用途・マスク済みサンプルデータ）、データリネージ（Source / Workflow / Saved Query / Parent Segment とテーブル）、ER図、テーブル別サンプルクエリ、リビジョン管理と差分、社内用語とテーブル別の処理事例集（「売上の合計」→ SUM(単価*個数) / MAX(注文合計金額) など）を扱う。Trigger on 「データカタログを作って」「データカタログを更新」「テーブル定義書を作りたい」「論理名を付けて」「リネージを可視化」「ER図を作って」「メタデータを整備」「<顧客名>-data-catalog を作って」, data catalog, metadata catalog, data lineage, ER diagram for Treasure Data, or /treasure-ai-data-catalog-builder."
+description: "Treasure Data 環境のデータカタログを tdx の読み取り専用コマンドで作成・定期更新し、ビューアー（Treasure AI Data Catalog）で開ける ZIP と、誰でも使える <name>-data-catalog SKILL を生成する。メタデータ（スキーマ・利用者の言語での論理名・説明・利用用途・マスク済みサンプルデータ）、データリネージ（Source / Workflow / Saved Query / Parent Segment とテーブル）、ER図、テーブル別サンプルクエリ、リビジョン管理と差分、社内用語とテーブル別の処理事例集（「売上の合計」→ SUM(単価*個数) / MAX(注文合計金額) など）を扱う。Trigger on 「データカタログを作って」「データカタログを更新」「テーブル定義書を作りたい」「論理名を付けて」「リネージを可視化」「ER図を作って」「メタデータを整備」「<顧客名>-data-catalog を作って」「正規化した論理名をパーセグに反映して」「Parent Segment の表示名を直して」, data catalog, metadata catalog, data lineage, ER diagram for Treasure Data, or /treasure-ai-data-catalog-builder."
 ---
 
 # Treasure AI Data Catalog Builder
@@ -16,7 +16,7 @@ Treasure Data の Parent Segment / Workflow / Saved Query / Source / データ�
 
 ## 絶対に守ること
 
-1. **tdx は読み取り専用で使う。** `wf run` / `wf push` / `wf upload` / `wf delete` / `wf retry` / `wf attempt ... kill|retry` / `ps run` / `ps push` / `sg push` / `journey resume` / `job schedule run|create|update|delete` / `job submit` での書き込み、`CREATE` / `INSERT` / `DELETE` / `DROP` を含む SQL は実行しない。
+1. **tdx は読み取り専用で使う**（唯一の例外は「Parent Segment への反映モード」での、ユーザー承認後の `tdx ps push`）。 `wf run` / `wf push` / `wf upload` / `wf delete` / `wf retry` / `wf attempt ... kill|retry` / `ps run` / `ps push` / `sg push` / `journey resume` / `job schedule run|create|update|delete` / `job submit` での書き込み、`CREATE` / `INSERT` / `DELETE` / `DROP` を含む SQL は実行しない。
 2. **`tdx api` を自分で有効化しない。** 無効のままなら他の手段（Workflow の `td_load>` 設定、ユーザーへの質問）で補う。
 3. **個人情報を生で取得しない。** サンプル取得はマスク式を SQL に組み込んで行う（`references/metadata-rules.md`）。氏名・メール・電話・住所・生年月日・自由記述は ZIP に生値を入れない。
 4. **重いクエリを投げない。** `time` 列があるテーブルは必ず `td_interval(time, '-7d')` などで絞り、`LIMIT` と `approx_distinct` を使う。フルスキャンになるプロファイリングは確認してから行う。
@@ -26,6 +26,7 @@ Treasure Data の Parent Segment / Workflow / Saved Query / Source / データ�
 ## モードの判定
 
 - 前回のカタログ ZIP が添付された、または「更新」と言われた → **更新モード**（末尾）
+- カタログで正規化した論理名を Parent Segment の設定（属性・ビヘイビアの表示名）に反映してほしいと言われた → **Parent Segment への反映モード**（末尾）
 - それ以外 → **新規作成**
 
 ## 新規作成の手順
@@ -60,13 +61,15 @@ node $SKILL/scripts/catalog-cli.mjs init data-catalog/catalog --name draft --lan
 
 | 起点 | 主なコマンド | 得るもの |
 | --- | --- | --- |
-| Parent Segment | `tdx ps view` / `tdx ps pull` / `tdx ps desc` / `tdx ps fields`、`tdx wf attempts cdp_audience_<id>` → `tdx wf attempt <id> logs` | **元データ**（マスター・属性・ビヘイビアの元テーブル）、結合キー、出力DB（`cdp_audience_<id>`）、属性の表示名（論理名の一次情報） |
+| Parent Segment | `tdx ps view` / `tdx ps pull` / `tdx ps desc` / `tdx ps fields`、`tdx wf attempts cdp_audience_<id>` → `tdx wf attempt <id> logs` | **元データ**（マスター・属性・ビヘイビアの元テーブル）、結合キー、出力DB（`cdp_audience_<id>`）、属性の表示名（論理名の判断材料。人が入力したものなので確定扱いにしない） |
 | Workflow | `tdx wf projects` → `tdx wf pull <project> <dir>` / `tdx wf workflows` / `tdx wf schedules` | `.dig` と SQL から読み書きテーブル、`td_load>`（Source）、`td_run>`（Saved Query）、JOIN 条件、集計式 |
 | Saved Query | `tdx job schedule list` → `tdx job schedule show <name>` | SQL・DB・スケジュール・出力先 |
 | Source | Workflow の `td_load>` 設定、（ユーザーが有効化済みなら）`tdx api`、ユーザーへの確認 | コネクタ種別・取込先テーブル・スケジュール |
 | データベース | `tdx tables <db>` | テーブル一覧 |
 
 **Parent Segment が指定された場合は、Parent Segment 用に作られる前の元データも必ず対象にする。** まず構成ファイル（`tdx ps pull` の YAML）でマスター・属性・ビヘイビアの元テーブルを列挙し、足りなければ Workflow プロジェクト `cdp_audience_<Parent Segment ID>` の最新の実行ログ（`tdx wf attempts` → `tdx wf attempt <id> tasks` / `logs`）の SQL から元テーブルを拾う。手順は `references/collection-playbook.md` の「Parent Segment の元データ」。
+
+出力 DB `cdp_audience_<id>` の `customers`（属性テーブル群を PIVOT して 1 顧客 1 行に集約したもの）と `behavior_<元テーブル名>`（ビヘイビアのテーブルをエンリッチしたもの）もカタログの対象にする。それ以外の中間テーブルは載せず、リネージ上は Parent Segment にまとめる。
 
 Parent Segment を TD コンソールの URL で指定された場合、URL の数値 ID から名前を推測しない（`tdx ps list` に ID が出ないため照合できない）。名前をユーザーに直接確認する。アカウントのデフォルト DB や文脈から類推しない。
 
@@ -142,6 +145,18 @@ node $SKILL/scripts/catalog-cli.mjs skill    data-catalog/catalog --out <skills 
    - 消えたテーブル・カラムは削除してよい（差分に「削除」として残る）
 4. `node $SKILL/scripts/catalog-cli.mjs diff data-catalog/catalog` で前回からの差分を見せ、内容をユーザーに確認する。
 5. 確認が取れたら `release --note "<変更の要約>"` → `pack` → `skill` を実行し、新しいリビジョン番号で報告する。
+
+## Parent Segment への反映モード
+
+カタログで正規化した論理名を、Parent Segment の属性・ビヘイビアの表示名に設定してほしいと依頼されたときの手順。**TD への書き込みになるので、各段階でユーザーの承認を取る。** YAML の書き方は `tdx-skills:parent-segment` スキルを参照する。
+
+1. `tdx ps pull "<name>" -o data-catalog/_work/ps/<name>.yml` で現在の設定を取得する（push 前の控えとして残す）。
+2. カタログの論理名と現在の表示名を突き合わせ、変更案の表を作る（属性/ビヘイビア・元カラム・現在の表示名 → 新しい表示名・根拠）。`logical_name_status` が `confirmed` のものだけを候補にし、`inferred` / `needs_review` は先に確認してもらう。
+3. **影響を調べる**: 表示名を参照している子セグメント・Journey・Activation が無いか確認する（`tdx sg pull` で子セグメントのルールを取得して名前を検索、`tdx journeys`）。参照があれば、変更で条件が壊れないかを表に添える。
+4. 変更案と影響をユーザーに示し、適用する行を選んでもらう。
+5. 承認された行だけ YAML を書き換え、`tdx ps validate` で検証してから `tdx ps push "<name>" --dry-run` で差分を見せる。
+6. ユーザーが「適用してよい」と明示したら `tdx ps push "<name>"` を実行する。`-y` / `--yes` は付けない。**`tdx ps run` は実行しない**（再実行のタイミングはユーザーが決める）。
+7. 反映後、カタログ側の該当カラムに「Parent Segment の表示名に反映済み」と記録し、更新モードと同じく `release --note "Parent Segment 表示名を反映"` する。
 
 ## 定期実行にする場合
 
