@@ -121,6 +121,38 @@
       "cardinality": "one-to-one",
       "confidence": "confirmed",
       "id_system": "member_id"
+    },
+    {
+      "from": {
+        "table": "cdp_audience_1001.behavior_orders_unified",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "to": {
+        "table": "cdp_audience_1001.customers",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed"
+    },
+    {
+      "from": {
+        "table": "cdp_audience_1001.behavior_web_pageviews",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "to": {
+        "table": "cdp_audience_1001.customers",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed"
     }
   ]
 }

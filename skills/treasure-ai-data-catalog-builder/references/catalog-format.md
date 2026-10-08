@@ -139,7 +139,7 @@ catalog/
 | `parent_segment` | `parent_segment:<assets.parent_segments[].id>` | 同 |
 | `segment` / `activation` / `external` | `<type>:<任意のid>` | 任意 |
 
-- 向きは常にデータの流れる方向（Source → テーブル → Workflow → テーブル → Parent Segment → Activation）。
+- 向きは常にデータの流れる方向（Source → テーブル → Workflow → テーブル → `cdp_audience_<id>.customers` / `behavior_*` → Parent Segment → Activation）。Parent Segment の元テーブルは、出力テーブル（`customers` / `behavior_*`）を経由して Parent Segment につなぐ。
 - Workflow / Saved Query は「読むテーブル → 処理」「処理 → 書くテーブル」の 2 本で表す。ビューアーはこれを「テーブル → テーブル」にまとめて表示できる。
 - `type`: `import` / `reads` / `writes` / `transform` / `feeds` / `activates`
 - `confidence`: `exact`（定義から確定）/ `inferred`（推定）/ `unresolved`（`${...}` 未解決など）。`note` に根拠を書く。

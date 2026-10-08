@@ -1,0 +1,59 @@
+{
+  "database": "cdp_audience_1001",
+  "name": "behavior_orders_unified",
+  "logical_name": "購買ビヘイビア（ミナト会員）",
+  "kind": "segment_output",
+  "description": "ビヘイビア「購買」の出力。ec_dwh.orders_unified に cdp_customer_id を付与したもの。1行 = 1購買。",
+  "usage": [
+    "購買条件でのセグメント作成",
+    "集計ビヘイビア（直近購入金額など）"
+  ],
+  "tags": [
+    "CDP",
+    "パーセグ",
+    "購買"
+  ],
+  "owner": "CRM推進室",
+  "update_frequency": "日次 07:00 JST",
+  "columns": [
+    {
+      "name": "cdp_customer_id",
+      "type": "varchar",
+      "logical_name": "CDP顧客ID",
+      "logical_name_status": "confirmed",
+      "description": "Audience Studio が採番する ID。customers と結合する。"
+    },
+    {
+      "name": "order_key",
+      "type": "varchar",
+      "logical_name": "統合注文キー",
+      "logical_name_status": "confirmed",
+      "description": "元: ec_dwh.orders_unified.order_key"
+    },
+    {
+      "name": "channel",
+      "type": "varchar",
+      "logical_name": "購買チャネル",
+      "logical_name_status": "confirmed",
+      "values": {
+        "ec": "EC",
+        "store": "店舗"
+      }
+    },
+    {
+      "name": "order_amount",
+      "type": "double",
+      "logical_name": "購買金額（税込）",
+      "logical_name_status": "confirmed",
+      "description": "元: ec_dwh.orders_unified.order_amount"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ]
+}

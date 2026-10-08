@@ -7,14 +7,14 @@
       "generated_by": "Treasure AI Studio",
       "note": "初版",
       "summary": {
-        "tables_added": 8,
+        "tables_added": 10,
         "tables_removed": 0,
         "tables_changed": 0,
         "columns_added": 0,
         "columns_removed": 0,
         "columns_changed": 0,
-        "lineage_changes": 17,
-        "relationship_changes": 7,
+        "lineage_changes": 19,
+        "relationship_changes": 9,
         "glossary_changes": 10,
         "asset_changes": 7
       }

@@ -22,7 +22,7 @@ Treasure AI Studio
 | 要素 | 内容 |
 | --- | --- |
 | メタデータ | テーブルスキーマ、利用者の言語での論理名（確定/推定/要確認）、説明（1行の粒度）、利用用途、マスク済みサンプルデータ、コード値、ID体系、個人情報区分 |
-| データリネージ | テーブルを中心に Source → テーブル → Workflow / Saved Query → テーブル → Parent Segment → Activation。推定・未解決は点線 |
+| データリネージ | テーブルを中心に Source → テーブル → Workflow / Saved Query → テーブル → `customers` / `behavior_*` → Parent Segment → Activation。推定・未解決は点線 |
 | ER図 | 結合キー・カーディナリティ・一致率の根拠 |
 | サンプルクエリ | テーブルごとの Trino クエリ（`td_interval` によるパーティション絞り込み済み） |
 | リビジョン管理 | 更新のたびに `r0001`, `r0002`… を採番。任意の2版の差分（テーブル・カラム・論理名・リネージ・ER・用語・アセット）と CHANGELOG |

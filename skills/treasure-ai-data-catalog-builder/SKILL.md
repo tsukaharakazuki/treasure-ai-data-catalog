@@ -100,7 +100,7 @@ Parent Segment を TD コンソールの URL で指定された場合、URL の�
 
 ### 7. リネージと ER
 
-- リネージ: 手順 4 の結果から `lineage.json` を作る。ノード ID は `table:<db>.<table>` / `source:<id>` / `workflow:<project>.<workflow>` / `saved_query:<name>` / `parent_segment:<id>` / `activation:<id>` / `external:<id>`。テーブル中心に、Source → テーブル → Workflow/Saved Query → テーブル → Parent Segment の向きで張る。`${...}` を解決できなかった参照は `confidence: unresolved`。
+- リネージ: 手順 4 の結果から `lineage.json` を作る。ノード ID は `table:<db>.<table>` / `source:<id>` / `workflow:<project>.<workflow>` / `saved_query:<name>` / `parent_segment:<id>` / `activation:<id>` / `external:<id>`。テーブル中心に、Source → テーブル → Workflow/Saved Query → テーブル → `customers` / `behavior_*` → Parent Segment の向きで張る（Parent Segment の元テーブルは出力テーブルを経由させ、Parent Segment へ直接つながない）。`${...}` を解決できなかった参照は `confidence: unresolved`。
 - ER: Workflow / Saved Query の JOIN 条件、Parent Segment の結合キー、ID体系の一致から `relationships.json` を作る。一致率クエリ（`references/collection-playbook.md`）で裏付けを取り、`evidence` に一致率を書く。裏付けが無いものは `confidence: inferred`。
 
 ### 8. サンプルクエリと処理事例

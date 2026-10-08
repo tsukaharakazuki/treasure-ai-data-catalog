@@ -1,0 +1,46 @@
+{
+  "database": "cdp_audience_1001",
+  "name": "behavior_web_pageviews",
+  "logical_name": "Web閲覧ビヘイビア（ミナト会員）",
+  "kind": "segment_output",
+  "description": "ビヘイビア「Web閲覧」の出力。raw_ec.web_pageviews に cdp_customer_id を付与したもの（会員に紐付いた閲覧のみ）。",
+  "usage": [
+    "閲覧条件でのセグメント作成"
+  ],
+  "tags": [
+    "CDP",
+    "パーセグ",
+    "Web"
+  ],
+  "owner": "CRM推進室",
+  "update_frequency": "日次 07:00 JST",
+  "columns": [
+    {
+      "name": "cdp_customer_id",
+      "type": "varchar",
+      "logical_name": "CDP顧客ID",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "td_url",
+      "type": "varchar",
+      "logical_name": "ページURL",
+      "logical_name_status": "confirmed",
+      "description": "元: raw_ec.web_pageviews.td_url"
+    },
+    {
+      "name": "td_title",
+      "type": "varchar",
+      "logical_name": "ページタイトル",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ]
+}

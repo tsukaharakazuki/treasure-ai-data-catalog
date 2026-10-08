@@ -47,10 +47,115 @@
   "tables": [
     {
       "database": "cdp_audience_1001",
+      "name": "behavior_orders_unified",
+      "logical_name": "購買ビヘイビア（ミナト会員）",
+      "kind": "segment_output",
+      "description": "ビヘイビア「購買」の出力。ec_dwh.orders_unified に cdp_customer_id を付与したもの。1行 = 1購買。",
+      "usage": [
+        "購買条件でのセグメント作成",
+        "集計ビヘイビア（直近購入金額など）"
+      ],
+      "tags": [
+        "CDP",
+        "パーセグ",
+        "購買"
+      ],
+      "owner": "CRM推進室",
+      "update_frequency": "日次 07:00 JST",
+      "columns": [
+        {
+          "name": "cdp_customer_id",
+          "type": "varchar",
+          "logical_name": "CDP顧客ID",
+          "logical_name_status": "confirmed",
+          "description": "Audience Studio が採番する ID。customers と結合する。"
+        },
+        {
+          "name": "order_key",
+          "type": "varchar",
+          "logical_name": "統合注文キー",
+          "logical_name_status": "confirmed",
+          "description": "元: ec_dwh.orders_unified.order_key"
+        },
+        {
+          "name": "channel",
+          "type": "varchar",
+          "logical_name": "購買チャネル",
+          "logical_name_status": "confirmed",
+          "values": {
+            "ec": "EC",
+            "store": "店舗"
+          }
+        },
+        {
+          "name": "order_amount",
+          "type": "double",
+          "logical_name": "購買金額（税込）",
+          "logical_name_status": "confirmed",
+          "description": "元: ec_dwh.orders_unified.order_amount"
+        },
+        {
+          "name": "time",
+          "type": "bigint",
+          "logical_name": "データ取込時刻（UNIX秒）",
+          "logical_name_status": "confirmed",
+          "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+          "is_partition_key": true
+        }
+      ]
+    },
+    {
+      "database": "cdp_audience_1001",
+      "name": "behavior_web_pageviews",
+      "logical_name": "Web閲覧ビヘイビア（ミナト会員）",
+      "kind": "segment_output",
+      "description": "ビヘイビア「Web閲覧」の出力。raw_ec.web_pageviews に cdp_customer_id を付与したもの（会員に紐付いた閲覧のみ）。",
+      "usage": [
+        "閲覧条件でのセグメント作成"
+      ],
+      "tags": [
+        "CDP",
+        "パーセグ",
+        "Web"
+      ],
+      "owner": "CRM推進室",
+      "update_frequency": "日次 07:00 JST",
+      "columns": [
+        {
+          "name": "cdp_customer_id",
+          "type": "varchar",
+          "logical_name": "CDP顧客ID",
+          "logical_name_status": "confirmed"
+        },
+        {
+          "name": "td_url",
+          "type": "varchar",
+          "logical_name": "ページURL",
+          "logical_name_status": "confirmed",
+          "description": "元: raw_ec.web_pageviews.td_url"
+        },
+        {
+          "name": "td_title",
+          "type": "varchar",
+          "logical_name": "ページタイトル",
+          "logical_name_status": "confirmed"
+        },
+        {
+          "name": "time",
+          "type": "bigint",
+          "logical_name": "データ取込時刻（UNIX秒）",
+          "logical_name_status": "confirmed",
+          "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+          "is_partition_key": true
+        }
+      ]
+    },
+    {
+      "database": "cdp_audience_1001",
       "name": "customers",
       "logical_name": "パーセグ顧客（ミナト会員）",
       "kind": "segment_output",
-      "description": "Parent Segment「ミナト会員」の出力テーブル。セグメント・アクティベーションの母集団。",
+      "description": "Parent Segment「ミナト会員」の customers。属性テーブル（会員マスタ）を PIVOT して 1行 = 1顧客（cdp_customer_id）に集約したもの。セグメント・アクティベーションの母集団。",
       "usage": [
         "セグメント作成",
         "アクティベーション"
@@ -854,6 +959,18 @@
         "ref": "cdp_audience_1001.customers"
       },
       {
+        "id": "table:cdp_audience_1001.behavior_orders_unified",
+        "type": "table",
+        "label": "購買ビヘイビア",
+        "ref": "cdp_audience_1001.behavior_orders_unified"
+      },
+      {
+        "id": "table:cdp_audience_1001.behavior_web_pageviews",
+        "type": "table",
+        "label": "Web閲覧ビヘイビア",
+        "ref": "cdp_audience_1001.behavior_web_pageviews"
+      },
+      {
         "id": "workflow:ec_daily.unify_orders",
         "type": "workflow",
         "label": "ec_daily.unify_orders",
@@ -954,26 +1071,41 @@
       },
       {
         "from": "table:ec_dwh.member_master",
-        "to": "parent_segment:1001",
-        "type": "feeds",
-        "confidence": "exact"
+        "to": "table:cdp_audience_1001.customers",
+        "type": "transform",
+        "confidence": "exact",
+        "note": "ps pull の master / attributes"
       },
       {
         "from": "table:ec_dwh.orders_unified",
-        "to": "parent_segment:1001",
-        "type": "feeds",
-        "confidence": "exact"
+        "to": "table:cdp_audience_1001.behavior_orders_unified",
+        "type": "transform",
+        "confidence": "exact",
+        "note": "ps pull の behaviors"
       },
       {
         "from": "table:raw_ec.web_pageviews",
+        "to": "table:cdp_audience_1001.behavior_web_pageviews",
+        "type": "transform",
+        "confidence": "exact",
+        "note": "ps pull の behaviors"
+      },
+      {
+        "from": "table:cdp_audience_1001.customers",
         "to": "parent_segment:1001",
         "type": "feeds",
         "confidence": "exact"
       },
       {
-        "from": "parent_segment:1001",
-        "to": "table:cdp_audience_1001.customers",
-        "type": "writes",
+        "from": "table:cdp_audience_1001.behavior_orders_unified",
+        "to": "parent_segment:1001",
+        "type": "feeds",
+        "confidence": "exact"
+      },
+      {
+        "from": "table:cdp_audience_1001.behavior_web_pageviews",
+        "to": "parent_segment:1001",
+        "type": "feeds",
         "confidence": "exact"
       },
       {
@@ -1106,6 +1238,38 @@
       "cardinality": "one-to-one",
       "confidence": "confirmed",
       "id_system": "member_id"
+    },
+    {
+      "from": {
+        "table": "cdp_audience_1001.behavior_orders_unified",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "to": {
+        "table": "cdp_audience_1001.customers",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed"
+    },
+    {
+      "from": {
+        "table": "cdp_audience_1001.behavior_web_pageviews",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "to": {
+        "table": "cdp_audience_1001.customers",
+        "columns": [
+          "cdp_customer_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed"
     }
   ],
   "glossary": {

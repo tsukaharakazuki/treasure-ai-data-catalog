@@ -73,6 +73,18 @@
       "ref": "cdp_audience_1001.customers"
     },
     {
+      "id": "table:cdp_audience_1001.behavior_orders_unified",
+      "type": "table",
+      "label": "購買ビヘイビア",
+      "ref": "cdp_audience_1001.behavior_orders_unified"
+    },
+    {
+      "id": "table:cdp_audience_1001.behavior_web_pageviews",
+      "type": "table",
+      "label": "Web閲覧ビヘイビア",
+      "ref": "cdp_audience_1001.behavior_web_pageviews"
+    },
+    {
       "id": "workflow:ec_daily.unify_orders",
       "type": "workflow",
       "label": "ec_daily.unify_orders",
@@ -191,26 +203,41 @@
     },
     {
       "from": "table:ec_dwh.member_master",
-      "to": "parent_segment:1001",
-      "type": "feeds",
-      "confidence": "exact"
+      "to": "table:cdp_audience_1001.customers",
+      "type": "transform",
+      "confidence": "exact",
+      "note": "ps pull の master / attributes"
     },
     {
       "from": "table:ec_dwh.orders_unified",
-      "to": "parent_segment:1001",
-      "type": "feeds",
-      "confidence": "exact"
+      "to": "table:cdp_audience_1001.behavior_orders_unified",
+      "type": "transform",
+      "confidence": "exact",
+      "note": "ps pull の behaviors"
     },
     {
       "from": "table:raw_ec.web_pageviews",
+      "to": "table:cdp_audience_1001.behavior_web_pageviews",
+      "type": "transform",
+      "confidence": "exact",
+      "note": "ps pull の behaviors"
+    },
+    {
+      "from": "table:cdp_audience_1001.customers",
       "to": "parent_segment:1001",
       "type": "feeds",
       "confidence": "exact"
     },
     {
-      "from": "parent_segment:1001",
-      "to": "table:cdp_audience_1001.customers",
-      "type": "writes",
+      "from": "table:cdp_audience_1001.behavior_orders_unified",
+      "to": "parent_segment:1001",
+      "type": "feeds",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:cdp_audience_1001.behavior_web_pageviews",
+      "to": "parent_segment:1001",
+      "type": "feeds",
       "confidence": "exact"
     },
     {

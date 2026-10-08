@@ -3,7 +3,7 @@
   "name": "customers",
   "logical_name": "パーセグ顧客（ミナト会員）",
   "kind": "segment_output",
-  "description": "Parent Segment「ミナト会員」の出力テーブル。セグメント・アクティベーションの母集団。",
+  "description": "Parent Segment「ミナト会員」の customers。属性テーブル（会員マスタ）を PIVOT して 1行 = 1顧客（cdp_customer_id）に集約したもの。セグメント・アクティベーションの母集団。",
   "usage": [
     "セグメント作成",
     "アクティベーション"

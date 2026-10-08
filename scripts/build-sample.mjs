@@ -178,7 +178,7 @@ function tables(revision) {
   }
   const customers = {
     database: 'cdp_audience_1001', name: 'customers', logical_name: 'パーセグ顧客（ミナト会員）', kind: 'segment_output',
-    description: 'Parent Segment「ミナト会員」の出力テーブル。セグメント・アクティベーションの母集団。',
+    description: 'Parent Segment「ミナト会員」の customers。属性テーブル（会員マスタ）を PIVOT して 1行 = 1顧客（cdp_customer_id）に集約したもの。セグメント・アクティベーションの母集団。',
     usage: ['セグメント作成', 'アクティベーション'], tags: ['CDP', 'パーセグ'], owner: 'CRM推進室', update_frequency: '日次 07:00 JST',
     columns: [
       col('cdp_customer_id', 'varchar', 'CDP顧客ID', { description: 'Audience Studio が採番する ID。' }),
@@ -204,7 +204,30 @@ function tables(revision) {
       { title: '直近30日の売上推移', engine: 'trino', sql: "SELECT sales_date, SUM(sales_amount) AS sales\nFROM ec_dwh.daily_sales_summary\nWHERE sales_date >= format_datetime(current_date - INTERVAL '30' DAY, 'yyyy-MM-dd')\nGROUP BY 1\nORDER BY 1" },
     ],
   }
-  return [shopifyOrders, orderItems, pos, crm, web, unified, master, customers, ...(revision >= 2 ? [summary] : [])]
+  const behaviorOrders = {
+    database: 'cdp_audience_1001', name: 'behavior_orders_unified', logical_name: '購買ビヘイビア（ミナト会員）', kind: 'segment_output',
+    description: 'ビヘイビア「購買」の出力。ec_dwh.orders_unified に cdp_customer_id を付与したもの。1行 = 1購買。',
+    usage: ['購買条件でのセグメント作成', '集計ビヘイビア（直近購入金額など）'], tags: ['CDP', 'パーセグ', '購買'], owner: 'CRM推進室', update_frequency: '日次 07:00 JST',
+    columns: [
+      col('cdp_customer_id', 'varchar', 'CDP顧客ID', { description: 'Audience Studio が採番する ID。customers と結合する。' }),
+      col('order_key', 'varchar', '統合注文キー', { description: '元: ec_dwh.orders_unified.order_key' }),
+      col('channel', 'varchar', '購買チャネル', { values: { ec: 'EC', store: '店舗' } }),
+      col('order_amount', 'double', '購買金額（税込）', { description: '元: ec_dwh.orders_unified.order_amount' }),
+      timeCol(),
+    ],
+  }
+  const behaviorWeb = {
+    database: 'cdp_audience_1001', name: 'behavior_web_pageviews', logical_name: 'Web閲覧ビヘイビア（ミナト会員）', kind: 'segment_output',
+    description: 'ビヘイビア「Web閲覧」の出力。raw_ec.web_pageviews に cdp_customer_id を付与したもの（会員に紐付いた閲覧のみ）。',
+    usage: ['閲覧条件でのセグメント作成'], tags: ['CDP', 'パーセグ', 'Web'], owner: 'CRM推進室', update_frequency: '日次 07:00 JST',
+    columns: [
+      col('cdp_customer_id', 'varchar', 'CDP顧客ID'),
+      col('td_url', 'varchar', 'ページURL', { description: '元: raw_ec.web_pageviews.td_url' }),
+      col('td_title', 'varchar', 'ページタイトル'),
+      timeCol(),
+    ],
+  }
+  return [shopifyOrders, orderItems, pos, crm, web, unified, master, customers, behaviorOrders, behaviorWeb, ...(revision >= 2 ? [summary] : [])]
 }
 
 function lineage(revision) {
@@ -217,6 +240,7 @@ function lineage(revision) {
     t('raw_ec.shopify_orders', 'EC注文'), t('raw_ec.shopify_order_items', 'EC注文明細'), t('raw_ec.pos_transactions', '店舗POS取引'),
     t('raw_ec.crm_members', 'CRM会員'), t('raw_ec.web_pageviews', 'Web閲覧ログ'), t('ec_dwh.orders_unified', '統合購買'),
     t('ec_dwh.member_master', '会員マスタ'), t('cdp_audience_1001.customers', 'パーセグ顧客'),
+    t('cdp_audience_1001.behavior_orders_unified', '購買ビヘイビア'), t('cdp_audience_1001.behavior_web_pageviews', 'Web閲覧ビヘイビア'),
     { id: 'workflow:ec_daily.unify_orders', type: 'workflow', label: 'ec_daily.unify_orders', ref: 'ec_daily.unify_orders' },
     { id: 'workflow:ec_daily.build_member_master', type: 'workflow', label: 'ec_daily.build_member_master', ref: 'ec_daily.build_member_master' },
     { id: 'parent_segment:1001', type: 'parent_segment', label: 'PS: ミナト会員', ref: '1001' },
@@ -235,10 +259,12 @@ function lineage(revision) {
     { from: 'table:raw_ec.crm_members', to: 'workflow:ec_daily.build_member_master', type: 'reads', confidence: 'exact' },
     { from: 'table:ec_dwh.orders_unified', to: 'workflow:ec_daily.build_member_master', type: 'reads', confidence: 'exact' },
     { from: 'workflow:ec_daily.build_member_master', to: 'table:ec_dwh.member_master', type: 'writes', confidence: 'exact' },
-    { from: 'table:ec_dwh.member_master', to: 'parent_segment:1001', type: 'feeds', confidence: 'exact' },
-    { from: 'table:ec_dwh.orders_unified', to: 'parent_segment:1001', type: 'feeds', confidence: 'exact' },
-    { from: 'table:raw_ec.web_pageviews', to: 'parent_segment:1001', type: 'feeds', confidence: 'exact' },
-    { from: 'parent_segment:1001', to: 'table:cdp_audience_1001.customers', type: 'writes', confidence: 'exact' },
+    { from: 'table:ec_dwh.member_master', to: 'table:cdp_audience_1001.customers', type: 'transform', confidence: 'exact', note: 'ps pull の master / attributes' },
+    { from: 'table:ec_dwh.orders_unified', to: 'table:cdp_audience_1001.behavior_orders_unified', type: 'transform', confidence: 'exact', note: 'ps pull の behaviors' },
+    { from: 'table:raw_ec.web_pageviews', to: 'table:cdp_audience_1001.behavior_web_pageviews', type: 'transform', confidence: 'exact', note: 'ps pull の behaviors' },
+    { from: 'table:cdp_audience_1001.customers', to: 'parent_segment:1001', type: 'feeds', confidence: 'exact' },
+    { from: 'table:cdp_audience_1001.behavior_orders_unified', to: 'parent_segment:1001', type: 'feeds', confidence: 'exact' },
+    { from: 'table:cdp_audience_1001.behavior_web_pageviews', to: 'parent_segment:1001', type: 'feeds', confidence: 'exact' },
     { from: 'parent_segment:1001', to: 'activation:meta_custom_audience', type: 'activates', confidence: 'exact' },
   ]
   if (revision >= 2) {
@@ -264,6 +290,8 @@ const relationships = () => [
   { from: { table: 'ec_dwh.orders_unified', columns: ['member_id'] }, to: { table: 'ec_dwh.member_master', columns: ['member_id'] }, cardinality: 'many-to-one', confidence: 'confirmed', id_system: 'member_id' },
   { from: { table: 'ec_dwh.member_master', columns: ['member_id'] }, to: { table: 'raw_ec.crm_members', columns: ['member_id'] }, cardinality: 'one-to-one', confidence: 'confirmed', id_system: 'member_id' },
   { from: { table: 'cdp_audience_1001.customers', columns: ['member_id'] }, to: { table: 'ec_dwh.member_master', columns: ['member_id'] }, cardinality: 'one-to-one', confidence: 'confirmed', id_system: 'member_id' },
+  { from: { table: 'cdp_audience_1001.behavior_orders_unified', columns: ['cdp_customer_id'] }, to: { table: 'cdp_audience_1001.customers', columns: ['cdp_customer_id'] }, cardinality: 'many-to-one', confidence: 'confirmed' },
+  { from: { table: 'cdp_audience_1001.behavior_web_pageviews', columns: ['cdp_customer_id'] }, to: { table: 'cdp_audience_1001.customers', columns: ['cdp_customer_id'] }, cardinality: 'many-to-one', confidence: 'confirmed' },
 ]
 
 function glossary(revision) {

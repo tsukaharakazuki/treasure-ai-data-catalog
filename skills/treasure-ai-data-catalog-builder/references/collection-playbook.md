@@ -48,7 +48,7 @@ YAML から取り出すもの:
 
 - マスターテーブル（`db.table`）と主キー
 - 属性: 元テーブル・元カラム・**表示名**・結合キー → 論理名の判断材料（`inferred`。`metadata-rules.md` の「Parent Segment の表示名」）とリレーション
-- ビヘイビア: 元テーブル・結合キー・表示名 → リネージ（元テーブル → `parent_segment:<id>` → `behavior_<元テーブル名>`）とリレーション
+- ビヘイビア: 元テーブル・結合キー・表示名 → リネージ（元テーブル → `behavior_<元テーブル名>` → `parent_segment:<id>`）とリレーション
 - 出力 DB（`cdp_audience_<id>`）の `customers` と `behavior_*`（下記「出力テーブル」）
 
 ### Parent Segment の元データ（必須）
@@ -70,7 +70,7 @@ Parent Segment が起点に指定されたら、**Parent Segment 用に作られ
    - `attempt ... kill` / `retry`、`wf retry`、`ps run` は実行しない。
    - ログの全文はカタログに保存しない（必要なテーブル名・結合条件だけ取り出す）。ログに値が出ていても転記しない。
 4. 元テーブルを対象テーブルに加え、スキーマ・論理名・サンプルなどを他のテーブルと同じ手順で作る。さらにその元テーブルの上流（Source・Workflow）へ 1 ホップ広げる。
-5. リネージは `table:<元テーブル> → parent_segment:<id>`（type `feeds`）。根拠を `note` に書く（例: `ps pull の behaviors.orders` / `cdp_audience_1389723 attempt 123456 のログ`）。構成ファイルとログの両方で確認できたものは `exact`、片方だけなら `exact`（構成ファイル）または `inferred`（ログからの推定）。
+5. リネージは「元テーブル → `customers` / `behavior_*` → `parent_segment:<id>`」（下記「出力テーブル」）。元テーブルから Parent Segment へ直接は張らない。根拠を `note` に書く（例: `ps pull の behaviors.orders` / `cdp_audience_1389723 attempt 123456 のログ`）。構成ファイルとログの両方で確認できたものは `exact`、片方だけなら `exact`（構成ファイル）または `inferred`（ログからの推定）。
 6. 構成ファイルとログで元テーブルが食い違う場合（構成変更後に未実行など）は、両方をユーザーに示して、どちらを正とするか確認する。
 
 ### Parent Segment の出力テーブル（`cdp_audience_<id>`）
@@ -85,8 +85,10 @@ Parent Segment が起点に指定されたら、**Parent Segment 用に作られ
 - それ以外の `cdp_audience_<id>` 内の中間テーブル（作業用・一時テーブル）はカタログに個別に載せず、リネージ上は `parent_segment:<id>` にまとめる。
 - スキーマは `tdx ps desc "<name>"` か information_schema（`table_schema = 'cdp_audience_<id>'`）で取る。
 - リネージ:
-  - 属性の元テーブル → `parent_segment:<id>` → `table:cdp_audience_<id>.customers`
-  - ビヘイビアの元テーブル → `parent_segment:<id>` → `table:cdp_audience_<id>.behavior_<元テーブル名>`
+  - 属性の元テーブル（マスター含む） → `table:cdp_audience_<id>.customers` → `parent_segment:<id>`
+  - ビヘイビアの元テーブル → `table:cdp_audience_<id>.behavior_<元テーブル名>` → `parent_segment:<id>`
+  - 元テーブル → 出力テーブルは type `transform`（Parent Segment の更新 Workflow `cdp_audience_<id>` による作成。`note` に根拠）、出力テーブル → Parent Segment は type `feeds`
+  - Parent Segment → Activation / Segment は従来どおり Parent Segment から張る
 - ER: `behavior_*.cdp_customer_id` → `customers.cdp_customer_id`（many-to-one）。元テーブルとの対応は、構成ファイルの結合キーで `customers` / `behavior_*` と元テーブルを結ぶ。
 - 処理事例: Parent Segment の集計ビヘイビアやセグメント条件で使われる集計（例: 直近30日の購入金額）は、`behavior_*` テーブルを使う variant として `recipes` に書く。
 

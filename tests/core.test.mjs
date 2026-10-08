@@ -34,10 +34,10 @@ test('the packed sample loads through the viewer loader with a folder prefix', (
   const catalog = loadCatalogFromFiles(files)
   assert.equal(catalog.catalog.name, 'minato')
   assert.equal(catalog.catalog.revision.id, 'r0002')
-  assert.equal(catalog.tables.length, 9)
+  assert.equal(catalog.tables.length, 11)
   assert.deepEqual(catalog.revisions.map((revision) => revision.id), ['r0001', 'r0002'])
   assert.ok(catalog.snapshots.r0001)
-  assert.equal(catalog.snapshots.r0001.tables.length, 8)
+  assert.equal(catalog.snapshots.r0001.tables.length, 10)
   assert.deepEqual(catalog.diagnostics.filter((item) => item.severity !== 'info'), [])
 })
 
@@ -71,8 +71,12 @@ test('lineage collapses workflows into labelled table edges and focuses', () => 
   const focused = buildLineageView(catalog.lineage, { focus: 'table:ec_dwh.member_master', depth: 1 })
   const ids = new Set(focused.nodes.map((node) => node.id))
   assert.ok(ids.has('workflow:ec_daily.build_member_master'))
-  assert.ok(ids.has('parent_segment:1001'))
+  // Parent segment sources reach the segment through its output tables, not directly.
+  assert.ok(ids.has('table:cdp_audience_1001.customers'))
+  assert.ok(!ids.has('parent_segment:1001'))
   assert.ok(!ids.has('source:shopify'))
+  const twoHops = buildLineageView(catalog.lineage, { focus: 'table:ec_dwh.member_master', depth: 2 })
+  assert.ok(twoHops.nodes.some((node) => node.id === 'parent_segment:1001'))
 
   const around = neighbours(catalog.lineage, 'table:ec_dwh.orders_unified')
   assert.ok(around.upstream.some((node) => node.id === 'table:raw_ec.pos_transactions'))
