@@ -1146,7 +1146,9 @@ code.expression {
 }
 
 .id-card {
+  min-width: 0;
   padding: 16px;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -1183,6 +1185,40 @@ code.expression {
 
 .facts-inline dd {
   margin: 0;
+}
+
+.id-card code {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.id-column a {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.id-column-name {
+  font-weight: 600;
+}
+
+.id-column-table {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Long physical names (db.table.column) have no spaces to wrap at. */
+.panel,
+.plain-list li > *,
+.data-table td {
+  min-width: 0;
+}
+
+.plain-list code,
+.table-link code,
+.data-table td code {
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Revisions ---------- */

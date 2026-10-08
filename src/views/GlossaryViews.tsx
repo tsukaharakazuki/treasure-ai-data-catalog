@@ -140,9 +140,12 @@ export function IdSystemsView({ catalog, route }: { catalog: LoadedCatalog; rout
             {system.note && <p className="note">{system.note}</p>}
             <ul className="plain-list">
               {(usage.get(system.id) ?? []).map((item) => (
-                <li key={`${item.table}.${item.column}`}>
-                  <a href={href('tables', item.table, { tab: 'schema', column: item.column })}><code>{item.table}.{item.column}</code></a>
-                  <span className="muted">{item.logical}</span>
+                <li key={`${item.table}.${item.column}`} className="id-column">
+                  <a href={href('tables', item.table, { tab: 'schema', column: item.column })}>
+                    <code className="id-column-name">{item.column}</code>
+                    <code className="id-column-table">{item.table}</code>
+                  </a>
+                  {item.logical && <span className="muted">{item.logical}</span>}
                 </li>
               ))}
             </ul>
