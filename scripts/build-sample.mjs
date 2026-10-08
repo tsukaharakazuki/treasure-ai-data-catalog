@@ -33,8 +33,8 @@ function tables(revision) {
     database: 'raw_ec', name: 'shopify_orders', logical_name: 'EC注文（Shopify）', kind: 'source',
     description: 'Shopify から日次で取り込む EC 注文ヘッダ。1行 = 1注文。キャンセル注文も含む。',
     usage: ['EC売上の日次集計', '注文単位の購買分析', 'キャンセル率のモニタリング'],
-    tags: ['EC', '注文', 'Shopify'], owner: 'EC推進部', update_frequency: '日次 04:00 JST',
-    row_count: 1284503, last_updated: '2026-10-08T19:10:00Z', primary_key: ['order_id'],
+    tags: ['EC', '注文', 'Shopify'], update_frequency: '日次 04:00 JST',
+    row_count: 1284503, last_updated_unixtime: 1791486600, primary_key: ['order_id'],
     console_url: `${CONSOLE}/app/databases/raw_ec/tables/shopify_orders`,
     columns: [
       col('order_id', 'varchar', '注文ID', { description: 'Shopify の注文番号（#付きを除去済み）', is_primary_key: true, pii: 'none' }),
@@ -61,8 +61,8 @@ function tables(revision) {
   const orderItems = {
     database: 'raw_ec', name: 'shopify_order_items', logical_name: 'EC注文明細（Shopify）', kind: 'source',
     description: 'EC 注文の明細。1行 = 1注文 × 1SKU。単価×数量から値引きを引くと明細金額になる。',
-    usage: ['商品別売上', 'カテゴリ別の併売分析'], tags: ['EC', '注文', '商品'], owner: 'EC推進部', update_frequency: '日次 04:00 JST',
-    row_count: 3920114, primary_key: ['order_id', 'line_no'],
+    usage: ['商品別売上', 'カテゴリ別の併売分析'], tags: ['EC', '注文', '商品'], update_frequency: '日次 04:00 JST',
+    row_count: 3920114, last_updated_unixtime: 1791486600, primary_key: ['order_id', 'line_no'],
     columns: [
       col('order_id', 'varchar', '注文ID', { is_primary_key: true }),
       col('line_no', 'int', '明細番号', { is_primary_key: true }),
@@ -83,8 +83,8 @@ function tables(revision) {
   const pos = {
     database: 'raw_ec', name: 'pos_transactions', logical_name: '店舗POS取引', kind: 'source',
     description: '全店舗の POS レシート。S3 経由で日次取込。1行 = 1レシート。',
-    usage: ['店舗売上の集計', 'ポイントカード会員の来店分析'], tags: ['店舗', 'POS'], owner: '店舗運営部', update_frequency: '日次 05:00 JST',
-    row_count: 8820331, primary_key: ['receipt_no'],
+    usage: ['店舗売上の集計', 'ポイントカード会員の来店分析'], tags: ['店舗', 'POS'], update_frequency: '日次 05:00 JST',
+    row_count: 8820331, last_updated_unixtime: 1791489900, primary_key: ['receipt_no'],
     columns: [
       col('receipt_no', 'varchar', 'レシート番号', { is_primary_key: true }),
       col('store_code', 'varchar', '店舗コード', { description: '4桁。先頭が 9 の店舗はアウトレット。' }),
@@ -104,8 +104,8 @@ function tables(revision) {
   const crm = {
     database: 'raw_ec', name: 'crm_members', logical_name: 'CRM会員', kind: 'source',
     description: 'Salesforce の会員オブジェクト。統合会員ID・EC会員番号・ポイントカード番号の対応表を兼ねる。',
-    usage: ['ID統合の起点', '会員属性の参照'], tags: ['会員', 'CRM', 'ID'], owner: 'CRM推進室', update_frequency: '日次 03:00 JST',
-    row_count: 412280, primary_key: ['member_id'],
+    usage: ['ID統合の起点', '会員属性の参照'], tags: ['会員', 'CRM', 'ID'], update_frequency: '日次 03:00 JST',
+    row_count: 412280, last_updated_unixtime: 1791482400, primary_key: ['member_id'],
     columns: [
       col('member_id', 'varchar', '統合会員ID', { id_system: 'member_id', is_primary_key: true, pii: 'identifier', stats: { null_ratio: 0, min_length: 10, max_length: 10, pattern: '10桁の数字' } }),
       col('ec_customer_id', 'varchar', 'EC会員番号', { id_system: 'ec_customer_id', pii: 'identifier' }),
@@ -129,7 +129,7 @@ function tables(revision) {
   const web = {
     database: 'raw_ec', name: 'web_pageviews', logical_name: 'Web閲覧ログ', kind: 'source',
     description: 'TD JS SDK で収集した EC サイトのページビュー。ログイン時のみ member_id が入る。',
-    usage: ['閲覧行動のセグメント', 'カゴ落ち分析'], tags: ['Web', '行動ログ'], owner: 'EC推進部', update_frequency: 'ストリーミング',
+    usage: ['閲覧行動のセグメント', 'カゴ落ち分析'], tags: ['Web', '行動ログ'], update_frequency: 'ストリーミング',
     columns: [
       col('td_client_id', 'varchar', 'ブラウザID（TD Client ID）', { id_system: 'td_client_id', pii: 'identifier' }),
       col('member_id', 'varchar', '統合会員ID', { id_system: 'member_id', pii: 'identifier' }),
@@ -144,7 +144,7 @@ function tables(revision) {
   const unified = {
     database: 'ec_dwh', name: 'orders_unified', logical_name: '統合購買', kind: 'derived',
     description: 'EC 注文と店舗 POS を統合会員IDで束ねた購買テーブル。キャンセル・返金は除外済み。',
-    usage: ['チャネル横断の売上・購買者数', 'パーセグの購買ビヘイビア'], tags: ['購買', '統合'], owner: 'データ基盤チーム', update_frequency: '日次 06:00 JST',
+    usage: ['チャネル横断の売上・購買者数', 'パーセグの購買ビヘイビア'], tags: ['購買', '統合'], update_frequency: '日次 06:00 JST',
     primary_key: ['order_key'],
     columns: [
       col('order_key', 'varchar', '統合注文キー', { description: '"ec:" + 注文ID または "store:" + レシート番号', is_primary_key: true }),
@@ -161,7 +161,7 @@ function tables(revision) {
   const master = {
     database: 'ec_dwh', name: 'member_master', logical_name: '会員マスタ', kind: 'master',
     description: 'パーセグのマスターテーブル。1行 = 1統合会員。',
-    usage: ['Parent Segment のマスター', '会員属性の分析'], tags: ['会員', 'マスター'], owner: 'データ基盤チーム', update_frequency: '日次 06:30 JST',
+    usage: ['Parent Segment のマスター', '会員属性の分析'], tags: ['会員', 'マスター'], update_frequency: '日次 06:30 JST',
     primary_key: ['member_id'],
     columns: [
       col('member_id', 'varchar', '統合会員ID', { id_system: 'member_id', is_primary_key: true, pii: 'identifier' }),
@@ -179,7 +179,7 @@ function tables(revision) {
   const customers = {
     database: 'cdp_audience_1001', name: 'customers', logical_name: 'パーセグ顧客（ミナト会員）', kind: 'segment_output',
     description: 'Parent Segment「ミナト会員」の customers。属性テーブル（会員マスタ）を PIVOT して 1行 = 1顧客（cdp_customer_id）に集約したもの。セグメント・アクティベーションの母集団。',
-    usage: ['セグメント作成', 'アクティベーション'], tags: ['CDP', 'パーセグ'], owner: 'CRM推進室', update_frequency: '日次 07:00 JST',
+    usage: ['セグメント作成', 'アクティベーション'], tags: ['CDP', 'パーセグ'], update_frequency: '日次 07:00 JST',
     columns: [
       col('cdp_customer_id', 'varchar', 'CDP顧客ID', { description: 'Audience Studio が採番する ID。' }),
       col('member_id', 'varchar', '統合会員ID', { id_system: 'member_id', pii: 'identifier' }),
@@ -191,7 +191,7 @@ function tables(revision) {
   const summary = {
     database: 'ec_dwh', name: 'daily_sales_summary', logical_name: '日次売上サマリ', kind: 'mart',
     description: 'Saved Query「daily_sales_summary」が毎朝作る日別・チャネル別の売上集計。ダッシュボード用。',
-    usage: ['経営ダッシュボード', '日次売上レポート'], tags: ['売上', 'マート'], owner: '経営企画部', update_frequency: '日次 07:30 JST',
+    usage: ['経営ダッシュボード', '日次売上レポート'], tags: ['売上', 'マート'], update_frequency: '日次 07:30 JST',
     primary_key: ['sales_date', 'channel'],
     columns: [
       col('sales_date', 'varchar', '売上日（JST）', { is_primary_key: true }),
@@ -207,7 +207,7 @@ function tables(revision) {
   const behaviorOrders = {
     database: 'cdp_audience_1001', name: 'behavior_orders_unified', logical_name: '購買ビヘイビア（ミナト会員）', kind: 'segment_output',
     description: 'ビヘイビア「購買」の出力。ec_dwh.orders_unified に cdp_customer_id を付与したもの。1行 = 1購買。',
-    usage: ['購買条件でのセグメント作成', '集計ビヘイビア（直近購入金額など）'], tags: ['CDP', 'パーセグ', '購買'], owner: 'CRM推進室', update_frequency: '日次 07:00 JST',
+    usage: ['購買条件でのセグメント作成', '集計ビヘイビア（直近購入金額など）'], tags: ['CDP', 'パーセグ', '購買'], update_frequency: '日次 07:00 JST',
     columns: [
       col('cdp_customer_id', 'varchar', 'CDP顧客ID', { description: 'Audience Studio が採番する ID。customers と結合する。' }),
       col('order_key', 'varchar', '統合注文キー', { description: '元: ec_dwh.orders_unified.order_key' }),
@@ -219,7 +219,7 @@ function tables(revision) {
   const behaviorWeb = {
     database: 'cdp_audience_1001', name: 'behavior_web_pageviews', logical_name: 'Web閲覧ビヘイビア（ミナト会員）', kind: 'segment_output',
     description: 'ビヘイビア「Web閲覧」の出力。raw_ec.web_pageviews に cdp_customer_id を付与したもの（会員に紐付いた閲覧のみ）。',
-    usage: ['閲覧条件でのセグメント作成'], tags: ['CDP', 'パーセグ', 'Web'], owner: 'CRM推進室', update_frequency: '日次 07:00 JST',
+    usage: ['閲覧条件でのセグメント作成'], tags: ['CDP', 'パーセグ', 'Web'], update_frequency: '日次 07:00 JST',
     columns: [
       col('cdp_customer_id', 'varchar', 'CDP顧客ID'),
       col('td_url', 'varchar', 'ページURL', { description: '元: raw_ec.web_pageviews.td_url' }),
@@ -383,7 +383,7 @@ function updateManifest(patch) {
 main(['init', OUT, '--name', 'minato', '--display-name', 'ミナト雑貨 データカタログ（サンプル）', '--customer', 'ミナト雑貨株式会社（架空）', '--service', 'ミナト雑貨 EC・店舗', '--lang', 'ja', '--site', 'us01'])
 const scope = { databases: ['raw_ec', 'ec_dwh', 'cdp_audience_1001'], parent_segments: ['ミナト会員'], workflow_projects: ['ec_daily'], saved_queries: [], sources: ['shopify_daily_import', 'pos_s3_import', 'sfdc_members'], inputs: [] }
 updateManifest({
-  td: { site: 'us01', console_base_url: CONSOLE },
+  td: { site: 'us01', console_base_url: CONSOLE, timezone: 'Asia/Tokyo' },
   scope,
   description: '架空の小売企業を想定した合成サンプルです。実在の企業・人物・値は含みません。',
 })

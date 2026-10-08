@@ -34,7 +34,7 @@ catalog/
   "service": "ACME オンラインストア",
   "language": "ja",
   "revision": { "id": "r0001", "number": 1, "generated_at": "2026-10-09T09:00:00+09:00", "generated_by": "Treasure AI Studio", "note": "初版" },
-  "td": { "site": "us01", "console_base_url": "https://console.treasuredata.com" },
+  "td": { "site": "us01", "console_base_url": "https://console.treasuredata.com", "timezone": "Asia/Tokyo" },
   "scope": {
     "databases": ["raw_ec"],
     "parent_segments": ["ACME会員"],
@@ -69,10 +69,9 @@ catalog/
   "description": "Shopify から日次で取り込む EC 注文ヘッダ。1行 = 1注文。キャンセル注文も含む。",
   "usage": ["EC売上の日次集計", "キャンセル率のモニタリング"],
   "tags": ["EC", "注文"],
-  "owner": "EC推進部",
   "update_frequency": "日次 04:00 JST",
   "row_count": 1284503,
-  "last_updated": "2026-10-08T19:10:00Z",
+  "last_updated_unixtime": 1791486600,
   "console_url": "https://console.treasuredata.com/...",
   "primary_key": ["order_id"],
   "columns": [
@@ -105,6 +104,8 @@ catalog/
 | --- | --- |
 | `kind` | `source`（取込）/ `derived`（加工）/ `mart`（集計）/ `master` / `segment_output`（Parent Segment 出力）/ `temporary` |
 | `description` | **1行が何を表すか（粒度）** を必ず含める |
+| `row_count` | `SELECT COUNT(*)` の結果 |
+| `last_updated_unixtime` | `MAX(time)`（UNIX 秒）。ビューアーは `td.timezone`（既定 `Asia/Tokyo`）で `yyyy-MM-dd HH:mm:ss` 表示。`time` 列が無いテーブルは省略 |
 | `usage` | 利用用途。下流の Workflow / Parent Segment / Saved Query から読み取る |
 | `columns[].logical_name_status` | `confirmed`（一次情報・ユーザー確認済み）/ `inferred`（推定）/ `needs_review`（要確認） |
 | `columns[].pii` | `none` / `identifier`（会員ID・Cookie ID など）/ `personal`（メール・氏名・電話・住所）/ `sensitive`（生年月日・健康・決済など） |

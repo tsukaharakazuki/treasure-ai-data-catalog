@@ -7,7 +7,7 @@
 ```bash
 tdx status                                  # プロファイル・site・アカウント
 tdx databases --json                        # DB 一覧
-tdx tables <db> --json                      # テーブル一覧（行数・更新日時が含まれれば使う）
+tdx tables <db> --json                      # テーブル一覧（行数・最終更新は 6 章のクエリで取る）
 ```
 
 `--site` / `--profile` はユーザーが指定したものだけを使う。
@@ -162,6 +162,27 @@ tdx query "<上の SQL>" --json
 # 使えない場合はテーブルごとに
 tdx describe <db>.<table> --json
 ```
+
+### 行数と最終更新
+
+各テーブルで 1 回だけ実行し、`row_count` と `last_updated_unixtime` に入れる。
+
+```sql
+-- time 列があるテーブル
+SELECT COUNT(*) AS row_count, MAX(time) AS last_updated_unixtime
+FROM <db>.<table>
+```
+
+```sql
+-- time 列が無いテーブル（行数のみ。last_updated_unixtime は省略）
+SELECT COUNT(*) AS row_count
+FROM <db>.<table>
+```
+
+- `last_updated_unixtime` は UNIX 秒のまま数値で入れる。ビューアーが `catalog.json` の `td.timezone`（既定 `Asia/Tokyo`）で `yyyy-MM-dd HH:mm:ss` に変換して表示する。
+- 文字列で残す必要があるときは `td_time_string(MAX(time), 's!', 'JST')`（`yyyy-MM-dd HH:mm:ss`）を `last_updated` に入れる。
+- 更新モードでも毎回取り直す（行数・最終更新はリビジョン差分の対象外）。
+- オーナーは取得・記載しない。
 
 ### ID・コード値候補の軽量プロファイル
 

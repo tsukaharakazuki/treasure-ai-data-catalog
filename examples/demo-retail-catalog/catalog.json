@@ -15,7 +15,8 @@
   },
   "td": {
     "site": "us01",
-    "console_base_url": "https://console.treasuredata.com"
+    "console_base_url": "https://console.treasuredata.com",
+    "timezone": "Asia/Tokyo"
   },
   "scope": {
     "databases": [

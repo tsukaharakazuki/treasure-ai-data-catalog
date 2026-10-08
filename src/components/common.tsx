@@ -104,6 +104,34 @@ export function formatValue(value: unknown): string {
   return String(value)
 }
 
+/** yyyy-MM-dd HH:mm:ss for a UNIX time (seconds) in the given IANA time zone. */
+export function formatUnixTime(seconds: number, timeZone = 'Asia/Tokyo'): string {
+  try {
+    // Validate the zone; an unknown one in catalog.json falls back to JST.
+    new Intl.DateTimeFormat('en-CA', { timeZone })
+  } catch {
+    timeZone = 'Asia/Tokyo'
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(seconds * 1000))
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`
+}
+
+export function formatLastUpdated(table: { last_updated_unixtime?: number; last_updated?: string }, timeZone?: string): string {
+  if (typeof table.last_updated_unixtime === 'number' && Number.isFinite(table.last_updated_unixtime)) {
+    return formatUnixTime(table.last_updated_unixtime, timeZone)
+  }
+  if (!table.last_updated) return '-'
+  const parsed = Date.parse(table.last_updated)
+  // ISO strings from older catalogs are converted; already formatted strings are shown as-is.
+  return /T/.test(table.last_updated) && !Number.isNaN(parsed) ? formatUnixTime(parsed / 1000, timeZone) : table.last_updated
+}
+
 export function formatNumber(value?: number): string {
   return value === undefined ? '-' : value.toLocaleString('ja-JP')
 }

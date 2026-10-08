@@ -220,7 +220,7 @@ const stable = (value) => {
   return JSON.stringify(value)
 }
 const same = (a, b) => stable(a) === stable(b)
-const TABLE_FIELDS = ['logical_name', 'kind', 'description', 'usage', 'tags', 'owner', 'update_frequency', 'primary_key', 'sample_queries']
+const TABLE_FIELDS = ['logical_name', 'kind', 'description', 'usage', 'tags', 'update_frequency', 'primary_key', 'sample_queries']
 const COLUMN_FIELDS = ['type', 'logical_name', 'description', 'pii', 'id_system', 'values', 'is_primary_key']
 
 function diffItems(before, after, keyOf, labelOf) {

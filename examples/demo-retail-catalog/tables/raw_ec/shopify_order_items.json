@@ -13,9 +13,9 @@
     "注文",
     "商品"
   ],
-  "owner": "EC推進部",
   "update_frequency": "日次 04:00 JST",
   "row_count": 3920114,
+  "last_updated_unixtime": 1791486600,
   "primary_key": [
     "order_id",
     "line_no"

@@ -14,10 +14,9 @@
     "注文",
     "Shopify"
   ],
-  "owner": "EC推進部",
   "update_frequency": "日次 04:00 JST",
   "row_count": 1284503,
-  "last_updated": "2026-10-08T19:10:00Z",
+  "last_updated_unixtime": 1791486600,
   "primary_key": [
     "order_id"
   ],

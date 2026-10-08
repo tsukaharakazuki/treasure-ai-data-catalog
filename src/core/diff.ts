@@ -41,7 +41,7 @@ export interface CatalogDiff {
   summary: Record<string, number>
 }
 
-const TABLE_FIELDS = ['logical_name', 'kind', 'description', 'usage', 'tags', 'owner', 'update_frequency', 'primary_key', 'sample_queries'] as const
+const TABLE_FIELDS = ['logical_name', 'kind', 'description', 'usage', 'tags', 'update_frequency', 'primary_key', 'sample_queries'] as const
 const COLUMN_FIELDS = ['type', 'logical_name', 'description', 'pii', 'id_system', 'values', 'is_primary_key'] as const
 
 function stable(value: unknown): string {

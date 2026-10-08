@@ -80,7 +80,7 @@ Parent Segment を TD コンソールの URL で指定された場合、URL の�
 各テーブルについて `references/collection-playbook.md` の「スキーマとプロファイル」に従い:
 
 1. スキーマ（information_schema または `tdx describe <db>.<table> --json`）
-2. 行数・最終更新（取得できる場合のみ）
+2. 行数と最終更新をクエリで取得する: `SELECT COUNT(*), MAX(time)`（`row_count` と `last_updated_unixtime`。`time` 列が無ければ行数のみ）。オーナーは取得しない
 3. ID 候補・コード値候補カラムの軽量プロファイル（桁数・形式・NULL 率・値の種類）
 4. マスク付きサンプル（含める場合のみ、10行。`LIMIT 10`）
 5. 論理名・説明・利用用途を `references/metadata-rules.md` に従って作成

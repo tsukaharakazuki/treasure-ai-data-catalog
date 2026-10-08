@@ -12,9 +12,9 @@
     "店舗",
     "POS"
   ],
-  "owner": "店舗運営部",
   "update_frequency": "日次 05:00 JST",
   "row_count": 8820331,
+  "last_updated_unixtime": 1791489900,
   "primary_key": [
     "receipt_no"
   ],

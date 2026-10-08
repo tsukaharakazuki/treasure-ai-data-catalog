@@ -33,6 +33,8 @@ export interface CatalogManifest {
     site?: string
     account_id?: string
     console_base_url?: string
+    /** IANA time zone used to display timestamps. Default Asia/Tokyo. */
+    timezone?: string
   }
   scope?: {
     databases?: string[]
@@ -90,9 +92,14 @@ export interface CatalogTable {
   description?: string
   usage?: string[]
   tags?: string[]
+  /** @deprecated Not collected or shown any more; kept so older catalogs still load. */
   owner?: string
   update_frequency?: string
+  /** Result of SELECT COUNT(*) at catalog build time. */
   row_count?: number
+  /** MAX(time) of the table (UNIX seconds). Shown as yyyy-MM-dd HH:mm:ss in td.timezone. */
+  last_updated_unixtime?: number
+  /** Pre-formatted fallback when there is no time column (yyyy-MM-dd HH:mm:ss). */
   last_updated?: string
   console_url?: string
   primary_key?: string[]

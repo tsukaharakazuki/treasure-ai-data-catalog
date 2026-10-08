@@ -12,7 +12,6 @@
     "購買",
     "統合"
   ],
-  "owner": "データ基盤チーム",
   "update_frequency": "日次 06:00 JST",
   "primary_key": [
     "order_key"

@@ -16,7 +16,8 @@
     },
     "td": {
       "site": "us01",
-      "console_base_url": "https://console.treasuredata.com"
+      "console_base_url": "https://console.treasuredata.com",
+      "timezone": "Asia/Tokyo"
     },
     "scope": {
       "databases": [
@@ -62,7 +63,6 @@
         "パーセグ",
         "購買"
       ],
-      "owner": "CRM推進室",
       "update_frequency": "日次 07:00 JST",
       "columns": [
         {
@@ -120,7 +120,6 @@
         "パーセグ",
         "Web"
       ],
-      "owner": "CRM推進室",
       "update_frequency": "日次 07:00 JST",
       "columns": [
         {
@@ -166,7 +165,6 @@
         "CDP",
         "パーセグ"
       ],
-      "owner": "CRM推進室",
       "update_frequency": "日次 07:00 JST",
       "columns": [
         {
@@ -218,7 +216,6 @@
         "売上",
         "マート"
       ],
-      "owner": "経営企画部",
       "update_frequency": "日次 07:30 JST",
       "primary_key": [
         "sales_date",
@@ -280,7 +277,6 @@
         "会員",
         "マスター"
       ],
-      "owner": "データ基盤チーム",
       "update_frequency": "日次 06:30 JST",
       "primary_key": [
         "member_id"
@@ -364,7 +360,6 @@
         "購買",
         "統合"
       ],
-      "owner": "データ基盤チーム",
       "update_frequency": "日次 06:00 JST",
       "primary_key": [
         "order_key"
@@ -441,9 +436,9 @@
         "CRM",
         "ID"
       ],
-      "owner": "CRM推進室",
       "update_frequency": "日次 03:00 JST",
       "row_count": 412280,
+      "last_updated_unixtime": 1791482400,
       "primary_key": [
         "member_id"
       ],
@@ -570,9 +565,9 @@
         "店舗",
         "POS"
       ],
-      "owner": "店舗運営部",
       "update_frequency": "日次 05:00 JST",
       "row_count": 8820331,
+      "last_updated_unixtime": 1791489900,
       "primary_key": [
         "receipt_no"
       ],
@@ -673,9 +668,9 @@
         "注文",
         "商品"
       ],
-      "owner": "EC推進部",
       "update_frequency": "日次 04:00 JST",
       "row_count": 3920114,
+      "last_updated_unixtime": 1791486600,
       "primary_key": [
         "order_id",
         "line_no"
@@ -776,10 +771,9 @@
         "注文",
         "Shopify"
       ],
-      "owner": "EC推進部",
       "update_frequency": "日次 04:00 JST",
       "row_count": 1284503,
-      "last_updated": "2026-10-08T19:10:00Z",
+      "last_updated_unixtime": 1791486600,
       "primary_key": [
         "order_id"
       ],
@@ -910,7 +904,6 @@
         "Web",
         "行動ログ"
       ],
-      "owner": "EC推進部",
       "update_frequency": "ストリーミング",
       "columns": [
         {

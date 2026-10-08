@@ -12,6 +12,7 @@ import {
   Section,
   SqlBlock,
   TableLink,
+  formatLastUpdated,
   formatNumber,
   formatValue,
 } from '../components/common'
@@ -127,10 +128,9 @@ function TableDetail({ table, catalog, initialTab, highlight }: { table: Catalog
       {tab === 'overview' && (
         <>
           <div className="facts">
-            <div><span>オーナー</span><strong>{table.owner ?? '-'}</strong></div>
             <div><span>更新頻度</span><strong>{table.update_frequency ?? '-'}</strong></div>
             <div><span>行数</span><strong>{formatNumber(table.row_count)}</strong></div>
-            <div><span>最終更新</span><strong>{table.last_updated?.slice(0, 16).replace('T', ' ') ?? '-'}</strong></div>
+            <div><span>最終更新（MAX(time)）</span><strong>{formatLastUpdated(table, catalog.catalog.td?.timezone)}</strong></div>
             <div><span>主キー</span><strong>{table.primary_key?.join(', ') ?? '-'}</strong></div>
           </div>
           {(table.tags?.length ?? 0) > 0 && <div className="tags">{table.tags?.map((tag) => <span key={tag} className="tag">{tag}</span>)}</div>}
