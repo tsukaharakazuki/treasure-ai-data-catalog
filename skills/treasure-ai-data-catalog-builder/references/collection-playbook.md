@@ -20,9 +20,17 @@ URL からは「種類を表す語」と「数値 ID または名前」を取り
 | --- | --- | --- |
 | `workflows`, `projects` | Workflow | `tdx wf projects --json` / `tdx wf workflows --json` で ID を照合 |
 | `databases`, `tables` | テーブル | パス中の DB 名・テーブル名、または `tdx tables` で照合 |
-| `parentSegments`, `audiences`, `ms`, `cdp` | Parent Segment | `tdx ps list --json` で ID を照合 |
+| `parentSegments`, `audiences`, `ms`, `cdp` | Parent Segment | **ID からは特定できない。必ずユーザーに名前を聞く**（下記） |
 | `queries`, `saved` | Saved Query | `tdx job schedule list --json` で ID/名前を照合 |
 | `sources`, `data-sources`, `connections`, `integrations` | Source | 下の「4. Source」へ |
+
+### Parent Segment の URL は数値 ID から名前を推測しない
+
+`tdx ps list` の出力には Parent Segment の数値 ID が含まれないため、`/app/dw/parentSegments/1389723` や `/app/ms/1389723` のような URL の ID を一覧と突き合わせても名前は特定できない。
+
+- URL に数値 ID しか無い場合は、`tdx ps list` を実行した後でも推測せず、「この URL の Parent Segment 名を教えてください」とユーザーに直接確認する。
+- アカウントのデフォルト DB（`tdx status` の database など）、DB 名、会話の文脈から Parent Segment を類推しない。デフォルト DB をもとに推測して、別の Parent Segment を対象にしてしまった事例がある。
+- `tdx ps list` の一覧を見せて選んでもらうのはよい。ただし、選ばれるまで `ps view` / `ps pull` は行わない。
 
 ドメインと site の対応: `console.treasuredata.com` = us01、`console.treasuredata.co.jp` = jp01、`console.eu01.treasuredata.com` = eu01、`console.ap02.treasuredata.com` = ap02。`console-next.` などの前置きが付くこともある。
 

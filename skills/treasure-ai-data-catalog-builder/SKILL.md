@@ -35,7 +35,7 @@ Treasure Data の Parent Segment / Workflow / Saved Query / Source / データ�
 次を質問する。選択肢があるものは選択肢で示す。
 
 1. **カタログの起点**（複数選択可）: Parent Segment（Audience Studio）/ Workflow プロジェクト / Saved Query / Source（データコネクタ取込）/ データベース指定
-2. **対象の名前、または TD コンソールの URL**（複数可）。例: Parent Segment 名、Workflow プロジェクト名、`https://console.treasuredata.com/...` の URL
+2. **対象の名前、または TD コンソールの URL**（複数可）。例: Parent Segment 名、Workflow プロジェクト名、`https://console.treasuredata.com/...` の URL。**Parent Segment は URL だけでは特定できないので、名前も一緒に聞く**
 3. **サンプルデータ**: 含める（マスク済み・各テーブル3行、既定）/ 含めない
 4. **論理名・説明の言語**: 既定はユーザーの言語（日本語なら `ja`）
 5. **社内用語や、よく出る集計指示**があれば（例: 「売上」「購入者数」「アクティブ会員」の定義）。後でも構わないと伝える
@@ -65,6 +65,8 @@ node $SKILL/scripts/catalog-cli.mjs init data-catalog/catalog --name draft --lan
 | Saved Query | `tdx job schedule list` → `tdx job schedule show <name>` | SQL・DB・スケジュール・出力先 |
 | Source | Workflow の `td_load>` 設定、（ユーザーが有効化済みなら）`tdx api`、ユーザーへの確認 | コネクタ種別・取込先テーブル・スケジュール |
 | データベース | `tdx tables <db>` | テーブル一覧 |
+
+Parent Segment を TD コンソールの URL で指定された場合、URL の数値 ID から名前を推測しない（`tdx ps list` に ID が出ないため照合できない）。名前をユーザーに直接確認する。アカウントのデフォルト DB や文脈から類推しない。
 
 起点から辿ったテーブルを **上流（Source・入力）と下流（出力・Parent Segment）に 1 ホップずつ** 広げて対象にする。対象テーブルが 50 を超えそうなら、一覧を見せて範囲を確認する。
 
