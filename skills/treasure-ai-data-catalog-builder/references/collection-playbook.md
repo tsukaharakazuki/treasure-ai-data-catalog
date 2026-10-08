@@ -51,6 +51,28 @@ YAML から取り出すもの:
 - ビヘイビア: 元テーブル・結合キー・表示名 → リネージ（テーブル → `parent_segment:<id>`）とリレーション
 - 出力 DB（`cdp_audience_<id>`）→ `parent_segment:<id>` → `table:cdp_audience_<id>.customers` などのエッジ
 
+### Parent Segment の元データ（必須）
+
+Parent Segment が起点に指定されたら、**Parent Segment 用に作られる前の元データ**（マスター・属性・ビヘイビアが参照する元テーブル）も必ずカタログの対象にする。出力 DB `cdp_audience_<id>` のテーブルだけで終わらせない。
+
+1. 名前から ID を得る: `tdx ps view "<name>"` で Parent Segment ID を確認する（名前 → ID はよい。ID → 名前の推測はしない）。
+2. **構成ファイルで確認する**（先に行う）: `tdx ps pull "<name>"` の YAML から、マスター・各属性・各ビヘイビアの `database` / `table` と結合キーを列挙する。
+3. **最新の実行ログで確認する**（構成ファイルで足りないとき、または実際に読まれたテーブルを裏付けるとき）: Parent Segment の更新 Workflow はプロジェクト `cdp_audience_<id>` として動いている。
+
+   ```bash
+   tdx wf attempts cdp_audience_<id> --json --limit 5       # 最新の成功した attempt を選ぶ
+   tdx wf attempt <attempt-id> tasks --json                 # タスク一覧
+   tdx wf attempt <attempt-id> logs "<task-name>"           # 各タスクのログ（実行 SQL）
+   tdx wf timeline --attempt-id <attempt-id>                # 任意。タスクの流れの確認
+   ```
+
+   ログ中の SQL の `FROM` / `JOIN` から、`cdp_audience_<id>` 以外の DB のテーブルを元データとして拾う。`cdp_audience_<id>` 内の中間テーブルは `kind: temporary` とし、カタログには載せなくてよい（リネージ上は `parent_segment:<id>` にまとめる）。
+   - `attempt ... kill` / `retry`、`wf retry`、`ps run` は実行しない。
+   - ログの全文はカタログに保存しない（必要なテーブル名・結合条件だけ取り出す）。ログに値が出ていても転記しない。
+4. 元テーブルを対象テーブルに加え、スキーマ・論理名・サンプルなどを他のテーブルと同じ手順で作る。さらにその元テーブルの上流（Source・Workflow）へ 1 ホップ広げる。
+5. リネージは `table:<元テーブル> → parent_segment:<id>`（type `feeds`）。根拠を `note` に書く（例: `ps pull の behaviors.orders` / `cdp_audience_1389723 attempt 123456 のログ`）。構成ファイルとログの両方で確認できたものは `exact`、片方だけなら `exact`（構成ファイル）または `inferred`（ログからの推定）。
+6. 構成ファイルとログで元テーブルが食い違う場合（構成変更後に未実行など）は、両方をユーザーに示して、どちらを正とするか確認する。
+
 `tdx activations "<ps名>/<segment名>"` で Activation が分かる場合は `activation:` ノードを追加してよい（接続設定の中身は書かない）。
 
 ## 3. Workflow

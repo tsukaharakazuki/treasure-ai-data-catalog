@@ -16,7 +16,7 @@ Treasure Data の Parent Segment / Workflow / Saved Query / Source / データ�
 
 ## 絶対に守ること
 
-1. **tdx は読み取り専用で使う。** `wf run` / `wf push` / `wf upload` / `wf delete` / `wf retry` / `ps run` / `ps push` / `sg push` / `journey resume` / `job schedule run|create|update|delete` / `job submit` での書き込み、`CREATE` / `INSERT` / `DELETE` / `DROP` を含む SQL は実行しない。
+1. **tdx は読み取り専用で使う。** `wf run` / `wf push` / `wf upload` / `wf delete` / `wf retry` / `wf attempt ... kill|retry` / `ps run` / `ps push` / `sg push` / `journey resume` / `job schedule run|create|update|delete` / `job submit` での書き込み、`CREATE` / `INSERT` / `DELETE` / `DROP` を含む SQL は実行しない。
 2. **`tdx api` を自分で有効化しない。** 無効のままなら他の手段（Workflow の `td_load>` 設定、ユーザーへの質問）で補う。
 3. **個人情報を生で取得しない。** サンプル取得はマスク式を SQL に組み込んで行う（`references/metadata-rules.md`）。氏名・メール・電話・住所・生年月日・自由記述は ZIP に生値を入れない。
 4. **重いクエリを投げない。** `time` 列があるテーブルは必ず `td_interval(time, '-7d')` などで絞り、`LIMIT` と `approx_distinct` を使う。フルスキャンになるプロファイリングは確認してから行う。
@@ -60,11 +60,13 @@ node $SKILL/scripts/catalog-cli.mjs init data-catalog/catalog --name draft --lan
 
 | 起点 | 主なコマンド | 得るもの |
 | --- | --- | --- |
-| Parent Segment | `tdx ps list` → `tdx ps view` / `tdx ps pull` / `tdx ps desc` / `tdx ps fields` | マスター・属性・ビヘイビアのテーブル、結合キー、出力DB（`cdp_audience_<id>`）、属性の表示名（論理名の一次情報） |
+| Parent Segment | `tdx ps view` / `tdx ps pull` / `tdx ps desc` / `tdx ps fields`、`tdx wf attempts cdp_audience_<id>` → `tdx wf attempt <id> logs` | **元データ**（マスター・属性・ビヘイビアの元テーブル）、結合キー、出力DB（`cdp_audience_<id>`）、属性の表示名（論理名の一次情報） |
 | Workflow | `tdx wf projects` → `tdx wf pull <project> <dir>` / `tdx wf workflows` / `tdx wf schedules` | `.dig` と SQL から読み書きテーブル、`td_load>`（Source）、`td_run>`（Saved Query）、JOIN 条件、集計式 |
 | Saved Query | `tdx job schedule list` → `tdx job schedule show <name>` | SQL・DB・スケジュール・出力先 |
 | Source | Workflow の `td_load>` 設定、（ユーザーが有効化済みなら）`tdx api`、ユーザーへの確認 | コネクタ種別・取込先テーブル・スケジュール |
 | データベース | `tdx tables <db>` | テーブル一覧 |
+
+**Parent Segment が指定された場合は、Parent Segment 用に作られる前の元データも必ず対象にする。** まず構成ファイル（`tdx ps pull` の YAML）でマスター・属性・ビヘイビアの元テーブルを列挙し、足りなければ Workflow プロジェクト `cdp_audience_<Parent Segment ID>` の最新の実行ログ（`tdx wf attempts` → `tdx wf attempt <id> tasks` / `logs`）の SQL から元テーブルを拾う。手順は `references/collection-playbook.md` の「Parent Segment の元データ」。
 
 Parent Segment を TD コンソールの URL で指定された場合、URL の数値 ID から名前を推測しない（`tdx ps list` に ID が出ないため照合できない）。名前をユーザーに直接確認する。アカウントのデフォルト DB や文脈から類推しない。
 
