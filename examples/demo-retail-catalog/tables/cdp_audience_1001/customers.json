@@ -1,0 +1,52 @@
+{
+  "database": "cdp_audience_1001",
+  "name": "customers",
+  "logical_name": "パーセグ顧客（ミナト会員）",
+  "kind": "segment_output",
+  "description": "Parent Segment「ミナト会員」の出力テーブル。セグメント・アクティベーションの母集団。",
+  "usage": [
+    "セグメント作成",
+    "アクティベーション"
+  ],
+  "tags": [
+    "CDP",
+    "パーセグ"
+  ],
+  "owner": "CRM推進室",
+  "update_frequency": "日次 07:00 JST",
+  "columns": [
+    {
+      "name": "cdp_customer_id",
+      "type": "varchar",
+      "logical_name": "CDP顧客ID",
+      "logical_name_status": "confirmed",
+      "description": "Audience Studio が採番する ID。"
+    },
+    {
+      "name": "member_id",
+      "type": "varchar",
+      "logical_name": "統合会員ID",
+      "logical_name_status": "confirmed",
+      "id_system": "member_id",
+      "pii": "identifier"
+    },
+    {
+      "name": "gender",
+      "type": "varchar",
+      "logical_name": "性別",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "age_band",
+      "type": "varchar",
+      "logical_name": "年代",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "ltv",
+      "type": "double",
+      "logical_name": "累計購買金額（LTV）",
+      "logical_name_status": "confirmed"
+    }
+  ]
+}

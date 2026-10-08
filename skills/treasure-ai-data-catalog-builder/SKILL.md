@@ -1,0 +1,144 @@
+---
+name: treasure-ai-data-catalog-builder
+description: "Treasure Data 環境のデータカタログを tdx の読み取り専用コマンドで作成・定期更新し、ビューアー（Treasure AI Data Catalog）で開ける ZIP と、誰でも使える <name>-data-catalog SKILL を生成する。メタデータ（スキーマ・利用者の言語での論理名・説明・利用用途・マスク済みサンプルデータ）、データリネージ（Source / Workflow / Saved Query / Parent Segment とテーブル）、ER図、テーブル別サンプルクエリ、リビジョン管理と差分、社内用語とテーブル別の処理事例集（「売上の合計」→ SUM(単価*個数) / MAX(注文合計金額) など）を扱う。Trigger on 「データカタログを作って」「データカタログを更新」「テーブル定義書を作りたい」「論理名を付けて」「リネージを可視化」「ER図を作って」「メタデータを整備」「<顧客名>-data-catalog を作って」, data catalog, metadata catalog, data lineage, ER diagram for Treasure Data, or /treasure-ai-data-catalog-builder."
+---
+
+# Treasure AI Data Catalog Builder
+
+Treasure Data の Parent Segment / Workflow / Saved Query / Source / データベースを起点にデータカタログを作り、ZIP と `<name>-data-catalog` SKILL を出力する。
+
+- 形式の定義: `references/catalog-format.md`（必読。ファイル構成・フィールド・ノード ID 規約）
+- tdx での収集手順とクエリ: `references/collection-playbook.md`
+- 論理名・ID体系・サンプルのマスク: `references/metadata-rules.md`
+- CLI: `scripts/catalog-cli.mjs`（Node.js 18 以上、依存なし。TD には接続しない）
+
+以下、この SKILL のディレクトリを `$SKILL` と書く。リポジトリから読んでいる場合は `skills/treasure-ai-data-catalog-builder` を指す。
+
+## 絶対に守ること
+
+1. **tdx は読み取り専用で使う。** `wf run` / `wf push` / `wf upload` / `wf delete` / `wf retry` / `ps run` / `ps push` / `sg push` / `journey resume` / `job schedule run|create|update|delete` / `job submit` での書き込み、`CREATE` / `INSERT` / `DELETE` / `DROP` を含む SQL は実行しない。
+2. **`tdx api` を自分で有効化しない。** 無効のままなら他の手段（Workflow の `td_load>` 設定、ユーザーへの質問）で補う。
+3. **個人情報を生で取得しない。** サンプル取得はマスク式を SQL に組み込んで行う（`references/metadata-rules.md`）。氏名・メール・電話・住所・生年月日・自由記述は ZIP に生値を入れない。
+4. **重いクエリを投げない。** `time` 列があるテーブルは必ず `td_interval(time, '-7d')` などで絞り、`LIMIT` と `approx_distinct` を使う。フルスキャンになるプロファイリングは確認してから行う。
+5. **推測を確定扱いしない。** 推定した論理名・リネージ・リレーションには `inferred` / `needs_review` を付ける。
+6. API キー・トークン・Webhook URL・接続情報をファイルにもチャットにも出さない。
+
+## モードの判定
+
+- 前回のカタログ ZIP が添付された、または「更新」と言われた → **更新モード**（末尾）
+- それ以外 → **新規作成**
+
+## 新規作成の手順
+
+### 1. ヒアリング（1回のメッセージでまとめて聞く）
+
+次を質問する。選択肢があるものは選択肢で示す。
+
+1. **カタログの起点**（複数選択可）: Parent Segment（Audience Studio）/ Workflow プロジェクト / Saved Query / Source（データコネクタ取込）/ データベース指定
+2. **対象の名前、または TD コンソールの URL**（複数可）。例: Parent Segment 名、Workflow プロジェクト名、`https://console.treasuredata.com/...` の URL
+3. **サンプルデータ**: 含める（マスク済み・各テーブル3行、既定）/ 含めない
+4. **論理名・説明の言語**: 既定はユーザーの言語（日本語なら `ja`）
+5. **社内用語や、よく出る集計指示**があれば（例: 「売上」「購入者数」「アクティブ会員」の定義）。後でも構わないと伝える
+
+顧客名・サービス名は **手順 9 で** 聞く（情報が出揃ってから決める）。
+
+### 2. 接続先の確認
+
+`tdx status` でプロファイル・サイト・アカウントを確認し、ユーザーに提示する。URL のドメインと site が食い違う（例: `console.treasuredata.co.jp` なのに us01）場合は、`--site` / `--profile` の指定をユーザーに確認する。
+
+### 3. 作業ディレクトリの初期化
+
+```bash
+node $SKILL/scripts/catalog-cli.mjs init data-catalog/catalog --name draft --lang ja --site <site>
+```
+
+`catalog.json` の `scope` に、手順 1 で受けた対象と URL（`scope.inputs`）を記録する。
+
+### 4. 対象の解決と収集
+
+`references/collection-playbook.md` の該当節に従って収集する。起点ごとの要点:
+
+| 起点 | 主なコマンド | 得るもの |
+| --- | --- | --- |
+| Parent Segment | `tdx ps list` → `tdx ps view` / `tdx ps pull` / `tdx ps desc` / `tdx ps fields` | マスター・属性・ビヘイビアのテーブル、結合キー、出力DB（`cdp_audience_<id>`）、属性の表示名（論理名の一次情報） |
+| Workflow | `tdx wf projects` → `tdx wf pull <project> <dir>` / `tdx wf workflows` / `tdx wf schedules` | `.dig` と SQL から読み書きテーブル、`td_load>`（Source）、`td_run>`（Saved Query）、JOIN 条件、集計式 |
+| Saved Query | `tdx job schedule list` → `tdx job schedule show <name>` | SQL・DB・スケジュール・出力先 |
+| Source | Workflow の `td_load>` 設定、（ユーザーが有効化済みなら）`tdx api`、ユーザーへの確認 | コネクタ種別・取込先テーブル・スケジュール |
+| データベース | `tdx tables <db>` | テーブル一覧 |
+
+起点から辿ったテーブルを **上流（Source・入力）と下流（出力・Parent Segment）に 1 ホップずつ** 広げて対象にする。対象テーブルが 50 を超えそうなら、一覧を見せて範囲を確認する。
+
+### 5. テーブルのメタデータ
+
+各テーブルについて `references/collection-playbook.md` の「スキーマとプロファイル」に従い:
+
+1. スキーマ（information_schema または `tdx describe <db>.<table> --json`）
+2. 行数・最終更新（取得できる場合のみ）
+3. ID 候補・コード値候補カラムの軽量プロファイル（桁数・形式・NULL 率・値の種類）
+4. マスク付きサンプル（含める場合のみ、3行）
+5. 論理名・説明・利用用途を `references/metadata-rules.md` に従って作成
+
+書き出しは `tables/<database>/<table>.json`（形式は `references/catalog-format.md`）。
+
+### 6. ID体系の判定と問い合わせ（必須）
+
+`references/metadata-rules.md` の「ID体系」に従い、ID らしいカラムを桁数・形式・値の重なりでグループ化する。次のどれかに当たるものは **必ずユーザーに問い合わせる**:
+
+- 同じカラム名なのにテーブルによって桁数・形式が違う
+- 名前が違うのに形式が同じで、値も重なる
+- `id` / `user_id` / `customer_id` / `member_id` のような汎用名が複数テーブルにある
+- 社内で複数の会員番号体系がありうる業種・構成（EC と店舗、旧システムと新システム など）
+
+問い合わせは「グループ・形式・該当カラム・推定名」の表で示し、同一体系か・正式名称は何かを聞く。回答は `glossary.json` の `id_systems` に `status: confirmed` で記録し、カラムの `id_system` を付ける。回答が無いものは `needs_review` のまま残す。
+
+### 7. リネージと ER
+
+- リネージ: 手順 4 の結果から `lineage.json` を作る。ノード ID は `table:<db>.<table>` / `source:<id>` / `workflow:<project>.<workflow>` / `saved_query:<name>` / `parent_segment:<id>` / `activation:<id>` / `external:<id>`。テーブル中心に、Source → テーブル → Workflow/Saved Query → テーブル → Parent Segment の向きで張る。`${...}` を解決できなかった参照は `confidence: unresolved`。
+- ER: Workflow / Saved Query の JOIN 条件、Parent Segment の結合キー、ID体系の一致から `relationships.json` を作る。一致率クエリ（`references/collection-playbook.md`）で裏付けを取り、`evidence` に一致率を書く。裏付けが無いものは `confidence: inferred`。
+
+### 8. サンプルクエリと処理事例
+
+- 各テーブルに 2〜3 本の `sample_queries`（期間指定・代表的な集計・結合）を付ける。`time` 列があれば `td_interval` を使う。作ったクエリは `LIMIT 1` を付けて実行し、エラーが無いことを確かめてから載せる。
+- 処理事例（`glossary.json` の `recipes`）: Workflow/Saved Query の SQL に出てくる集計式（`SUM(price * qty)`、`MAX(order_total)` など）、Parent Segment の集計ビヘイビア、ユーザーから聞いた用語から、**同じ指示がテーブルごとにどう計算されるか** を `variants` にまとめる。計算式の違い（税込/税抜、送料、キャンセル除外、明細とヘッダ）は `notes` / `conditions` に必ず書く。
+- 作った用語・処理事例の一覧を見せて、ユーザーに確認・追加してもらう。
+
+### 9. 顧客名・サービス名の確認
+
+ここで初めて、顧客名・サービス名と、SKILL 名に使う英小文字のスラッグ（例: `acme` → `acme-data-catalog`）を確認する。`catalog.json` の `name` / `display_name` / `customer` / `service` を更新する。
+
+### 10. 検証・リリース・出力
+
+```bash
+node $SKILL/scripts/catalog-cli.mjs validate data-catalog/catalog
+node $SKILL/scripts/catalog-cli.mjs release  data-catalog/catalog --note "初版"
+node $SKILL/scripts/catalog-cli.mjs pack     data-catalog/catalog --out data-catalog/<name>-data-catalog-r0001.zip
+node $SKILL/scripts/catalog-cli.mjs skill    data-catalog/catalog --out <skills ディレクトリ> --zip data-catalog/<name>-data-catalog-skill.zip
+```
+
+- `validate` の error は必ず直す。warning は理由を確認し、残すなら報告する。
+- skills ディレクトリは実行環境に合わせる（Treasure Work / Treasure AI Studio のユーザー SKILL は `~/.treasure-work/.claude/skills`、Claude Code は `~/.claude/skills`）。不明ならユーザーに聞く。
+- 生成した `SKILL.md` の description が顧客の言葉（用語・DB名）で書かれていることを確認する。
+
+### 11. 報告
+
+次を短くまとめて返す。
+
+- カタログ ZIP のパス（ビューアー https://tsukaharakazuki.github.io/treasure-ai-data-catalog/ で開ける）
+- 生成した `<name>-data-catalog` SKILL の場所と配布用 ZIP
+- 件数: テーブル / カラム / 論理名の確定率 / リネージ / リレーション / 用語 / 処理事例
+- 要確認として残したもの（論理名、ID体系、unresolved なリネージ）と、次に誰に何を聞けばよいか
+
+## 更新モード
+
+1. 前回の ZIP を展開する: `node $SKILL/scripts/catalog-cli.mjs unpack <前回.zip> data-catalog/catalog`
+2. `catalog.json` の `scope` に記録された対象で、手順 4〜8 を再実行する。
+3. **人が確定した情報を消さない**:
+   - `logical_name_status: confirmed` の論理名・説明・`id_system`・`values` は、カラムの型が変わっていない限り引き継ぐ
+   - 用語・処理事例・業務ルール・ID体系はユーザーの指示なく削除しない
+   - 消えたテーブル・カラムは削除してよい（差分に「削除」として残る）
+4. `node $SKILL/scripts/catalog-cli.mjs diff data-catalog/catalog` で前回からの差分を見せ、内容をユーザーに確認する。
+5. 確認が取れたら `release --note "<変更の要約>"` → `pack` → `skill` を実行し、新しいリビジョン番号で報告する。
+
+## 定期実行にする場合
+
+ユーザーが定期更新を望んだら、Treasure Work のエージェント（`work-agent` スキル）として「更新モード」を実行するよう提案する。スケジュールは `draft` で作り、有効化はユーザーに任せる。

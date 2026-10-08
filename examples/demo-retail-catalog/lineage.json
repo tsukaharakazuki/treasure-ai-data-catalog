@@ -1,0 +1,242 @@
+{
+  "nodes": [
+    {
+      "id": "source:shopify",
+      "type": "source",
+      "label": "Shopify（日次インポート）",
+      "ref": "shopify"
+    },
+    {
+      "id": "source:pos_s3",
+      "type": "source",
+      "label": "POS ファイル（S3）",
+      "ref": "pos_s3"
+    },
+    {
+      "id": "source:salesforce",
+      "type": "source",
+      "label": "Salesforce 会員",
+      "ref": "salesforce"
+    },
+    {
+      "id": "source:td_js_sdk",
+      "type": "source",
+      "label": "TD JS SDK",
+      "ref": "td_js_sdk"
+    },
+    {
+      "id": "table:raw_ec.shopify_orders",
+      "type": "table",
+      "label": "EC注文",
+      "ref": "raw_ec.shopify_orders"
+    },
+    {
+      "id": "table:raw_ec.shopify_order_items",
+      "type": "table",
+      "label": "EC注文明細",
+      "ref": "raw_ec.shopify_order_items"
+    },
+    {
+      "id": "table:raw_ec.pos_transactions",
+      "type": "table",
+      "label": "店舗POS取引",
+      "ref": "raw_ec.pos_transactions"
+    },
+    {
+      "id": "table:raw_ec.crm_members",
+      "type": "table",
+      "label": "CRM会員",
+      "ref": "raw_ec.crm_members"
+    },
+    {
+      "id": "table:raw_ec.web_pageviews",
+      "type": "table",
+      "label": "Web閲覧ログ",
+      "ref": "raw_ec.web_pageviews"
+    },
+    {
+      "id": "table:ec_dwh.orders_unified",
+      "type": "table",
+      "label": "統合購買",
+      "ref": "ec_dwh.orders_unified"
+    },
+    {
+      "id": "table:ec_dwh.member_master",
+      "type": "table",
+      "label": "会員マスタ",
+      "ref": "ec_dwh.member_master"
+    },
+    {
+      "id": "table:cdp_audience_1001.customers",
+      "type": "table",
+      "label": "パーセグ顧客",
+      "ref": "cdp_audience_1001.customers"
+    },
+    {
+      "id": "workflow:ec_daily.unify_orders",
+      "type": "workflow",
+      "label": "ec_daily.unify_orders",
+      "ref": "ec_daily.unify_orders"
+    },
+    {
+      "id": "workflow:ec_daily.build_member_master",
+      "type": "workflow",
+      "label": "ec_daily.build_member_master",
+      "ref": "ec_daily.build_member_master"
+    },
+    {
+      "id": "parent_segment:1001",
+      "type": "parent_segment",
+      "label": "PS: ミナト会員",
+      "ref": "1001"
+    },
+    {
+      "id": "activation:meta_custom_audience",
+      "type": "activation",
+      "label": "Meta カスタムオーディエンス",
+      "ref": "meta"
+    },
+    {
+      "id": "saved_query:daily_sales_summary",
+      "type": "saved_query",
+      "label": "SQ: daily_sales_summary",
+      "ref": "daily_sales_summary"
+    },
+    {
+      "id": "table:ec_dwh.daily_sales_summary",
+      "type": "table",
+      "label": "日次売上サマリ",
+      "ref": "ec_dwh.daily_sales_summary"
+    },
+    {
+      "id": "external:bi_dashboard",
+      "type": "external",
+      "label": "経営ダッシュボード（BI）",
+      "ref": "bi"
+    }
+  ],
+  "edges": [
+    {
+      "from": "source:shopify",
+      "to": "table:raw_ec.shopify_orders",
+      "type": "import",
+      "confidence": "exact"
+    },
+    {
+      "from": "source:shopify",
+      "to": "table:raw_ec.shopify_order_items",
+      "type": "import",
+      "confidence": "exact"
+    },
+    {
+      "from": "source:pos_s3",
+      "to": "table:raw_ec.pos_transactions",
+      "type": "import",
+      "confidence": "exact"
+    },
+    {
+      "from": "source:salesforce",
+      "to": "table:raw_ec.crm_members",
+      "type": "import",
+      "confidence": "exact"
+    },
+    {
+      "from": "source:td_js_sdk",
+      "to": "table:raw_ec.web_pageviews",
+      "type": "import",
+      "confidence": "inferred",
+      "note": "テーブル名と td_ 列から推定"
+    },
+    {
+      "from": "table:raw_ec.shopify_orders",
+      "to": "workflow:ec_daily.unify_orders",
+      "type": "reads",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:raw_ec.pos_transactions",
+      "to": "workflow:ec_daily.unify_orders",
+      "type": "reads",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:raw_ec.crm_members",
+      "to": "workflow:ec_daily.unify_orders",
+      "type": "reads",
+      "confidence": "exact"
+    },
+    {
+      "from": "workflow:ec_daily.unify_orders",
+      "to": "table:ec_dwh.orders_unified",
+      "type": "writes",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:raw_ec.crm_members",
+      "to": "workflow:ec_daily.build_member_master",
+      "type": "reads",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:ec_dwh.orders_unified",
+      "to": "workflow:ec_daily.build_member_master",
+      "type": "reads",
+      "confidence": "exact"
+    },
+    {
+      "from": "workflow:ec_daily.build_member_master",
+      "to": "table:ec_dwh.member_master",
+      "type": "writes",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:ec_dwh.member_master",
+      "to": "parent_segment:1001",
+      "type": "feeds",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:ec_dwh.orders_unified",
+      "to": "parent_segment:1001",
+      "type": "feeds",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:raw_ec.web_pageviews",
+      "to": "parent_segment:1001",
+      "type": "feeds",
+      "confidence": "exact"
+    },
+    {
+      "from": "parent_segment:1001",
+      "to": "table:cdp_audience_1001.customers",
+      "type": "writes",
+      "confidence": "exact"
+    },
+    {
+      "from": "parent_segment:1001",
+      "to": "activation:meta_custom_audience",
+      "type": "activates",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:ec_dwh.orders_unified",
+      "to": "saved_query:daily_sales_summary",
+      "type": "reads",
+      "confidence": "exact"
+    },
+    {
+      "from": "saved_query:daily_sales_summary",
+      "to": "table:ec_dwh.daily_sales_summary",
+      "type": "writes",
+      "confidence": "exact"
+    },
+    {
+      "from": "table:ec_dwh.daily_sales_summary",
+      "to": "external:bi_dashboard",
+      "type": "feeds",
+      "confidence": "inferred",
+      "note": "BI 接続ユーザーのクエリ履歴から推定"
+    }
+  ]
+}

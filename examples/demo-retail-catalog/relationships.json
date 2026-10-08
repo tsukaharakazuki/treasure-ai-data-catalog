@@ -1,0 +1,126 @@
+{
+  "relationships": [
+    {
+      "from": {
+        "table": "raw_ec.shopify_order_items",
+        "columns": [
+          "order_id"
+        ]
+      },
+      "to": {
+        "table": "raw_ec.shopify_orders",
+        "columns": [
+          "order_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed",
+      "evidence": "一致率 100%"
+    },
+    {
+      "from": {
+        "table": "raw_ec.shopify_orders",
+        "columns": [
+          "customer_id"
+        ]
+      },
+      "to": {
+        "table": "raw_ec.crm_members",
+        "columns": [
+          "ec_customer_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed",
+      "evidence": "非NULLの一致率 97.4%",
+      "id_system": "ec_customer_id"
+    },
+    {
+      "from": {
+        "table": "raw_ec.pos_transactions",
+        "columns": [
+          "member_card_no"
+        ]
+      },
+      "to": {
+        "table": "raw_ec.crm_members",
+        "columns": [
+          "card_no"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed",
+      "evidence": "非NULLの一致率 92.1%",
+      "id_system": "point_card_no"
+    },
+    {
+      "from": {
+        "table": "raw_ec.web_pageviews",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "to": {
+        "table": "raw_ec.crm_members",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "inferred",
+      "evidence": "ログイン時のみ値あり。一致率 99.0%",
+      "id_system": "member_id"
+    },
+    {
+      "from": {
+        "table": "ec_dwh.orders_unified",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "to": {
+        "table": "ec_dwh.member_master",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "cardinality": "many-to-one",
+      "confidence": "confirmed",
+      "id_system": "member_id"
+    },
+    {
+      "from": {
+        "table": "ec_dwh.member_master",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "to": {
+        "table": "raw_ec.crm_members",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "cardinality": "one-to-one",
+      "confidence": "confirmed",
+      "id_system": "member_id"
+    },
+    {
+      "from": {
+        "table": "cdp_audience_1001.customers",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "to": {
+        "table": "ec_dwh.member_master",
+        "columns": [
+          "member_id"
+        ]
+      },
+      "cardinality": "one-to-one",
+      "confidence": "confirmed",
+      "id_system": "member_id"
+    }
+  ]
+}

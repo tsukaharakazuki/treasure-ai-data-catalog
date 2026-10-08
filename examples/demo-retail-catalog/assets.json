@@ -1,0 +1,109 @@
+{
+  "sources": [
+    {
+      "id": "shopify",
+      "name": "shopify_daily_import",
+      "connector_type": "shopify",
+      "schedule": "0 4 * * * (JST)",
+      "mode": "append",
+      "target_tables": [
+        "raw_ec.shopify_orders",
+        "raw_ec.shopify_order_items"
+      ],
+      "description": "Shopify 注文の日次増分取込"
+    },
+    {
+      "id": "pos_s3",
+      "name": "pos_s3_import",
+      "connector_type": "s3_v2",
+      "schedule": "0 5 * * * (JST)",
+      "mode": "append",
+      "target_tables": [
+        "raw_ec.pos_transactions"
+      ]
+    },
+    {
+      "id": "salesforce",
+      "name": "sfdc_members",
+      "connector_type": "salesforce",
+      "schedule": "0 3 * * * (JST)",
+      "mode": "replace",
+      "target_tables": [
+        "raw_ec.crm_members"
+      ]
+    },
+    {
+      "id": "td_js_sdk",
+      "name": "TD JS SDK（minato-zakka.example）",
+      "connector_type": "td_js_sdk",
+      "mode": "streaming",
+      "target_tables": [
+        "raw_ec.web_pageviews"
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "ec_daily.unify_orders",
+      "project": "ec_daily",
+      "workflow": "unify_orders",
+      "schedule": "daily>: 06:00:00 (Asia/Tokyo)",
+      "description": "EC と POS を統合会員IDで束ねる",
+      "reads": [
+        "raw_ec.shopify_orders",
+        "raw_ec.pos_transactions",
+        "raw_ec.crm_members"
+      ],
+      "writes": [
+        "ec_dwh.orders_unified"
+      ]
+    },
+    {
+      "id": "ec_daily.build_member_master",
+      "project": "ec_daily",
+      "workflow": "build_member_master",
+      "schedule": "unify_orders の後続",
+      "description": "会員マスタを作成",
+      "reads": [
+        "raw_ec.crm_members",
+        "ec_dwh.orders_unified"
+      ],
+      "writes": [
+        "ec_dwh.member_master"
+      ]
+    }
+  ],
+  "saved_queries": [
+    {
+      "id": "daily_sales_summary",
+      "name": "daily_sales_summary",
+      "schedule": "30 7 * * * (JST)",
+      "database": "ec_dwh",
+      "engine": "trino",
+      "description": "日次売上サマリの洗い替え",
+      "reads": [
+        "ec_dwh.orders_unified"
+      ],
+      "writes": [
+        "ec_dwh.daily_sales_summary"
+      ],
+      "sql": "SELECT order_date AS sales_date, channel,\n       SUM(order_amount) AS sales_amount,\n       COUNT(*) AS order_count,\n       COUNT(DISTINCT member_id) AS buyer_count\nFROM ec_dwh.orders_unified\nGROUP BY 1, 2"
+    }
+  ],
+  "parent_segments": [
+    {
+      "id": "1001",
+      "name": "ミナト会員",
+      "master_table": "ec_dwh.member_master",
+      "attribute_tables": [
+        "ec_dwh.member_master"
+      ],
+      "behavior_tables": [
+        "ec_dwh.orders_unified",
+        "raw_ec.web_pageviews"
+      ],
+      "output_database": "cdp_audience_1001",
+      "description": "統合会員単位の Parent Segment"
+    }
+  ]
+}

@@ -1,0 +1,217 @@
+{
+  "terms": [
+    {
+      "term": "売上",
+      "aliases": [
+        "売り上げ",
+        "売上高",
+        "revenue"
+      ],
+      "category": "KPI",
+      "definition": "税込・キャンセル/返金除外の購買金額。送料は含む（明細ベースの商品売上は除く）。",
+      "related_tables": [
+        "ec_dwh.orders_unified",
+        "raw_ec.shopify_orders"
+      ]
+    },
+    {
+      "term": "購入者",
+      "aliases": [
+        "購買者",
+        "バイヤー"
+      ],
+      "category": "KPI",
+      "definition": "期間内に1回以上購買した統合会員。非会員は含めない。"
+    },
+    {
+      "term": "アクティブ会員",
+      "aliases": [
+        "稼働会員"
+      ],
+      "category": "会員",
+      "definition": "直近365日に1回以上購買した統合会員。",
+      "related_tables": [
+        "ec_dwh.member_master"
+      ]
+    },
+    {
+      "term": "アウトレット店",
+      "category": "店舗",
+      "definition": "店舗コードが 9 で始まる店舗。通常店舗の売上と分けて報告する。",
+      "related_columns": [
+        "raw_ec.pos_transactions.store_code"
+      ]
+    }
+  ],
+  "id_systems": [
+    {
+      "id": "member_id",
+      "name": "統合会員ID",
+      "description": "CRM で採番する全チャネル共通の会員ID。分析の標準キー。",
+      "pattern": "^[0-9]{10}$",
+      "length": 10,
+      "example_masked": "10****0021",
+      "status": "confirmed",
+      "columns": [
+        "raw_ec.crm_members.member_id",
+        "raw_ec.web_pageviews.member_id",
+        "ec_dwh.orders_unified.member_id",
+        "ec_dwh.member_master.member_id",
+        "cdp_audience_1001.customers.member_id"
+      ]
+    },
+    {
+      "id": "ec_customer_id",
+      "name": "EC会員番号",
+      "description": "Shopify 側の会員番号。統合会員IDとは crm_members で対応付ける。",
+      "pattern": "^C[0-9]{7}$",
+      "length": 8,
+      "example_masked": "C00****1",
+      "status": "confirmed",
+      "columns": [
+        "raw_ec.shopify_orders.customer_id",
+        "raw_ec.crm_members.ec_customer_id"
+      ]
+    },
+    {
+      "id": "point_card_no",
+      "name": "ポイントカード番号",
+      "description": "店舗のポイントカード番号。",
+      "pattern": "^29[0-9]{11}$",
+      "length": 13,
+      "example_masked": "29**********3",
+      "status": "confirmed",
+      "columns": [
+        "raw_ec.pos_transactions.member_card_no",
+        "raw_ec.crm_members.card_no"
+      ]
+    },
+    {
+      "id": "td_client_id",
+      "name": "ブラウザID",
+      "description": "TD JS SDK が発行する Cookie ID。",
+      "pattern": "UUID",
+      "status": "confirmed",
+      "columns": [
+        "raw_ec.web_pageviews.td_client_id"
+      ]
+    }
+  ],
+  "recipes": [
+    {
+      "id": "sales_total",
+      "instruction": "売上の合計を出して",
+      "aliases": [
+        "売上合計",
+        "売り上げを集計",
+        "売上金額"
+      ],
+      "term": "売上",
+      "description": "同じ「売上」でもテーブルごとに計算式が違う。チャネル横断なら統合購買、EC の商品別なら明細を使う。",
+      "variants": [
+        {
+          "table": "ec_dwh.orders_unified",
+          "expression": "SUM(order_amount)",
+          "conditions": "なし（キャンセル除外済み）",
+          "notes": "チャネル横断の標準。迷ったらこれ。",
+          "sql": "SELECT SUM(order_amount) AS sales\nFROM ec_dwh.orders_unified\nWHERE td_interval(time, '-1M', 'JST')"
+        },
+        {
+          "table": "raw_ec.shopify_orders",
+          "expression": "SUM(order_total)",
+          "conditions": "status NOT IN ('cancelled', 'refunded')",
+          "notes": "送料込みの税込合計。",
+          "sql": "SELECT SUM(order_total) AS sales\nFROM raw_ec.shopify_orders\nWHERE td_interval(time, '-1M', 'JST')\n  AND status NOT IN ('cancelled', 'refunded')"
+        },
+        {
+          "table": "raw_ec.shopify_order_items",
+          "expression": "SUM(unit_price * quantity - discount_amount)",
+          "conditions": "注文ヘッダと結合し status NOT IN ('cancelled', 'refunded')",
+          "notes": "送料を含まない商品売上。order_total の合計とは一致しない。"
+        },
+        {
+          "table": "raw_ec.pos_transactions",
+          "expression": "SUM(amount)",
+          "conditions": "なし",
+          "notes": "店舗のみ。"
+        },
+        {
+          "table": "ec_dwh.daily_sales_summary",
+          "expression": "SUM(sales_amount)",
+          "conditions": "sales_date で期間指定（time 列なし）",
+          "notes": "集計済みのため最速。日次より細かい粒度は不可。"
+        }
+      ]
+    },
+    {
+      "id": "order_max",
+      "instruction": "一番大きい注文はいくら？",
+      "aliases": [
+        "最高注文金額",
+        "最大注文額"
+      ],
+      "term": "注文",
+      "variants": [
+        {
+          "table": "raw_ec.shopify_orders",
+          "expression": "MAX(order_total)",
+          "conditions": "status NOT IN ('cancelled', 'refunded')"
+        },
+        {
+          "table": "raw_ec.shopify_order_items",
+          "expression": "注文ID単位で SUM(unit_price * quantity - discount_amount) してから MAX",
+          "conditions": "GROUP BY order_id",
+          "notes": "明細しかない場合の計算方法。"
+        }
+      ]
+    },
+    {
+      "id": "buyer_count",
+      "instruction": "購入者数を出して",
+      "aliases": [
+        "購買者数",
+        "買った人数",
+        "バイヤー数"
+      ],
+      "term": "購入者",
+      "variants": [
+        {
+          "table": "ec_dwh.orders_unified",
+          "expression": "COUNT(DISTINCT member_id)",
+          "conditions": "member_id IS NOT NULL",
+          "notes": "紐付けできない購買（非会員）は数えない。"
+        },
+        {
+          "table": "raw_ec.shopify_orders",
+          "expression": "COUNT(DISTINCT customer_id)",
+          "conditions": "status NOT IN ('cancelled', 'refunded')",
+          "notes": "EC会員番号ベース。店舗と合算しない。"
+        },
+        {
+          "table": "ec_dwh.daily_sales_summary",
+          "expression": "（使用不可）SUM(buyer_count)",
+          "notes": "日をまたいだ重複を除けないため、期間の購入者数は orders_unified から出す。"
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "title": "キャンセル・返金は売上に含めない",
+      "description": "shopify_orders.status が 'cancelled' / 'refunded' の注文は除外する。",
+      "applies_to": [
+        "raw_ec.shopify_orders",
+        "raw_ec.shopify_order_items"
+      ]
+    },
+    {
+      "title": "期間指定は JST",
+      "description": "td_interval(time, '-7d', 'JST') のように必ずタイムゾーン JST を指定する。",
+      "applies_to": [
+        "raw_ec.shopify_orders",
+        "raw_ec.pos_transactions",
+        "ec_dwh.orders_unified"
+      ]
+    }
+  ]
+}

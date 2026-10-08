@@ -1,0 +1,84 @@
+{
+  "database": "ec_dwh",
+  "name": "member_master",
+  "logical_name": "会員マスタ",
+  "kind": "master",
+  "description": "パーセグのマスターテーブル。1行 = 1統合会員。",
+  "usage": [
+    "Parent Segment のマスター",
+    "会員属性の分析"
+  ],
+  "tags": [
+    "会員",
+    "マスター"
+  ],
+  "owner": "データ基盤チーム",
+  "update_frequency": "日次 06:30 JST",
+  "primary_key": [
+    "member_id"
+  ],
+  "columns": [
+    {
+      "name": "member_id",
+      "type": "varchar",
+      "logical_name": "統合会員ID",
+      "logical_name_status": "confirmed",
+      "id_system": "member_id",
+      "is_primary_key": true,
+      "pii": "identifier"
+    },
+    {
+      "name": "gender",
+      "type": "varchar",
+      "logical_name": "性別",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "age_band",
+      "type": "varchar",
+      "logical_name": "年代",
+      "logical_name_status": "confirmed",
+      "values": {
+        "10s": "10代",
+        "20s": "20代",
+        "30s": "30代",
+        "40s": "40代",
+        "50s+": "50代以上"
+      }
+    },
+    {
+      "name": "pref",
+      "type": "varchar",
+      "logical_name": "都道府県",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "first_order_date",
+      "type": "varchar",
+      "logical_name": "初回購買日",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "ltv",
+      "type": "double",
+      "logical_name": "累計購買金額（LTV）",
+      "logical_name_status": "confirmed",
+      "description": "統合購買の累計（税込）。"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ],
+  "sample_queries": [
+    {
+      "title": "年代別の会員数と平均LTV",
+      "engine": "trino",
+      "sql": "SELECT age_band, COUNT(*) AS members, AVG(ltv) AS avg_ltv\nFROM ec_dwh.member_master\nGROUP BY 1\nORDER BY 1"
+    }
+  ]
+}

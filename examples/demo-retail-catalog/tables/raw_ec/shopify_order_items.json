@@ -1,0 +1,102 @@
+{
+  "database": "raw_ec",
+  "name": "shopify_order_items",
+  "logical_name": "EC注文明細（Shopify）",
+  "kind": "source",
+  "description": "EC 注文の明細。1行 = 1注文 × 1SKU。単価×数量から値引きを引くと明細金額になる。",
+  "usage": [
+    "商品別売上",
+    "カテゴリ別の併売分析"
+  ],
+  "tags": [
+    "EC",
+    "注文",
+    "商品"
+  ],
+  "owner": "EC推進部",
+  "update_frequency": "日次 04:00 JST",
+  "row_count": 3920114,
+  "primary_key": [
+    "order_id",
+    "line_no"
+  ],
+  "columns": [
+    {
+      "name": "order_id",
+      "type": "varchar",
+      "logical_name": "注文ID",
+      "logical_name_status": "confirmed",
+      "is_primary_key": true
+    },
+    {
+      "name": "line_no",
+      "type": "int",
+      "logical_name": "明細番号",
+      "logical_name_status": "confirmed",
+      "is_primary_key": true
+    },
+    {
+      "name": "sku",
+      "type": "varchar",
+      "logical_name": "商品SKU",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "unit_price",
+      "type": "double",
+      "logical_name": "販売単価（税込）",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "quantity",
+      "type": "int",
+      "logical_name": "数量",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "discount_amount",
+      "type": "double",
+      "logical_name": "値引額",
+      "logical_name_status": "confirmed",
+      "description": "明細単位の値引額（税込）。"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ],
+  "samples": {
+    "captured_at": "2026-10-08",
+    "rows": [
+      {
+        "order_id": "100245",
+        "line_no": 1,
+        "sku": "MUG-0012",
+        "unit_price": 1980,
+        "quantity": 2,
+        "discount_amount": 0,
+        "time": 1759839243
+      },
+      {
+        "order_id": "100245",
+        "line_no": 2,
+        "sku": "TWL-0301",
+        "unit_price": 2020,
+        "quantity": 1,
+        "discount_amount": 0,
+        "time": 1759839243
+      }
+    ]
+  },
+  "sample_queries": [
+    {
+      "title": "SKU別売上 TOP20（直近30日）",
+      "engine": "trino",
+      "sql": "SELECT i.sku, SUM(i.unit_price * i.quantity - i.discount_amount) AS sales\nFROM raw_ec.shopify_order_items i\nJOIN raw_ec.shopify_orders o ON o.order_id = i.order_id\nWHERE td_interval(i.time, '-30d', 'JST')\n  AND o.status NOT IN ('cancelled', 'refunded')\nGROUP BY 1\nORDER BY 2 DESC\nLIMIT 20"
+    }
+  ]
+}

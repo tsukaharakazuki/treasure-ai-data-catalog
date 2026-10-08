@@ -1,0 +1,130 @@
+{
+  "database": "raw_ec",
+  "name": "crm_members",
+  "logical_name": "CRM会員",
+  "kind": "source",
+  "description": "Salesforce の会員オブジェクト。統合会員ID・EC会員番号・ポイントカード番号の対応表を兼ねる。",
+  "usage": [
+    "ID統合の起点",
+    "会員属性の参照"
+  ],
+  "tags": [
+    "会員",
+    "CRM",
+    "ID"
+  ],
+  "owner": "CRM推進室",
+  "update_frequency": "日次 03:00 JST",
+  "row_count": 412280,
+  "primary_key": [
+    "member_id"
+  ],
+  "columns": [
+    {
+      "name": "member_id",
+      "type": "varchar",
+      "logical_name": "統合会員ID",
+      "logical_name_status": "confirmed",
+      "id_system": "member_id",
+      "is_primary_key": true,
+      "pii": "identifier",
+      "stats": {
+        "null_ratio": 0,
+        "min_length": 10,
+        "max_length": 10,
+        "pattern": "10桁の数字"
+      }
+    },
+    {
+      "name": "ec_customer_id",
+      "type": "varchar",
+      "logical_name": "EC会員番号",
+      "logical_name_status": "confirmed",
+      "id_system": "ec_customer_id",
+      "pii": "identifier"
+    },
+    {
+      "name": "card_no",
+      "type": "varchar",
+      "logical_name": "ポイントカード番号",
+      "logical_name_status": "confirmed",
+      "id_system": "point_card_no",
+      "pii": "identifier"
+    },
+    {
+      "name": "email",
+      "type": "varchar",
+      "logical_name": "メールアドレス",
+      "logical_name_status": "confirmed",
+      "pii": "personal"
+    },
+    {
+      "name": "birth_date",
+      "type": "varchar",
+      "logical_name": "生年月日",
+      "logical_name_status": "confirmed",
+      "pii": "sensitive"
+    },
+    {
+      "name": "gender_code",
+      "type": "varchar",
+      "logical_name": "性別コード",
+      "logical_name_status": "confirmed",
+      "values": {
+        "1": "男性",
+        "2": "女性",
+        "9": "回答しない"
+      }
+    },
+    {
+      "name": "pref",
+      "type": "varchar",
+      "logical_name": "都道府県",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "registered_at",
+      "type": "varchar",
+      "logical_name": "会員登録日",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ],
+  "samples": {
+    "captured_at": "2026-10-08",
+    "masked_columns": [
+      "member_id",
+      "ec_customer_id",
+      "card_no",
+      "email",
+      "birth_date"
+    ],
+    "rows": [
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "2",
+        "pref": "東京都",
+        "registered_at": "2019-04-12",
+        "time": 1759777200
+      }
+    ]
+  },
+  "sample_queries": [
+    {
+      "title": "ID 紐付け状況",
+      "engine": "trino",
+      "sql": "SELECT COUNT(*) AS members,\n       COUNT(ec_customer_id) AS with_ec,\n       COUNT(card_no) AS with_card\nFROM raw_ec.crm_members"
+    }
+  ]
+}

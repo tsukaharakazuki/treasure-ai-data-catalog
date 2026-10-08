@@ -1,0 +1,62 @@
+{
+  "database": "ec_dwh",
+  "name": "daily_sales_summary",
+  "logical_name": "日次売上サマリ",
+  "kind": "mart",
+  "description": "Saved Query「daily_sales_summary」が毎朝作る日別・チャネル別の売上集計。ダッシュボード用。",
+  "usage": [
+    "経営ダッシュボード",
+    "日次売上レポート"
+  ],
+  "tags": [
+    "売上",
+    "マート"
+  ],
+  "owner": "経営企画部",
+  "update_frequency": "日次 07:30 JST",
+  "primary_key": [
+    "sales_date",
+    "channel"
+  ],
+  "columns": [
+    {
+      "name": "sales_date",
+      "type": "varchar",
+      "logical_name": "売上日（JST）",
+      "logical_name_status": "confirmed",
+      "is_primary_key": true
+    },
+    {
+      "name": "channel",
+      "type": "varchar",
+      "logical_name": "購買チャネル",
+      "logical_name_status": "confirmed",
+      "is_primary_key": true
+    },
+    {
+      "name": "sales_amount",
+      "type": "double",
+      "logical_name": "売上金額（税込）",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "order_count",
+      "type": "bigint",
+      "logical_name": "購買件数",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "buyer_count",
+      "type": "bigint",
+      "logical_name": "購買者数",
+      "logical_name_status": "confirmed"
+    }
+  ],
+  "sample_queries": [
+    {
+      "title": "直近30日の売上推移",
+      "engine": "trino",
+      "sql": "SELECT sales_date, SUM(sales_amount) AS sales\nFROM ec_dwh.daily_sales_summary\nWHERE sales_date >= format_datetime(current_date - INTERVAL '30' DAY, 'yyyy-MM-dd')\nGROUP BY 1\nORDER BY 1"
+    }
+  ]
+}

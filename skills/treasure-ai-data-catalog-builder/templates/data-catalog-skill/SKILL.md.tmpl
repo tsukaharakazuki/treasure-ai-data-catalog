@@ -1,0 +1,52 @@
+---
+name: {{skill_name}}
+description: "{{customer}}（{{service}}）の Treasure Data データカタログ。{{customer}} のテーブル・カラムの意味（論理名）、どのテーブルを使うべきか、社内用語{{term_examples}}の定義、指示ごとのテーブル別の集計方法{{recipe_examples}}、ID体系（会員IDなど）、データリネージ（Source → テーブル → Workflow → Parent Segment）、ER（結合キー）、各テーブルのサンプルクエリを答え、正しい Trino SQL を書くときに使う。Trigger on {{customer}} のデータについての質問、「どのテーブル」「このカラムは何」「売上を出して」「SQLを書いて」「リネージ」「どこから来たデータ」「結合キー」「会員ID」、対象DB {{databases}}、or /{{skill_name}}."
+---
+
+# {{display_name}}
+
+{{customer}} の Treasure Data 環境（site: {{site}}）のデータカタログです。カタログのリビジョンは **{{revision}}**（{{generated_at}} 作成）、登録テーブルは {{table_count}} 件です。
+
+カタログは自動生成と人手の確認でできています。カタログに書かれていないことを推測で断定しないでください。
+
+## ファイル
+
+| ファイル | 内容 | いつ読むか |
+| --- | --- | --- |
+| `references/INDEX.md` | テーブル一覧・ID体系・用語・処理事例・アセットの索引 | **最初に必ず読む** |
+| `references/catalog/tables/<db>/<table>.json` | スキーマ、論理名、説明、利用用途、サンプルデータ、サンプルクエリ | 使うテーブルが決まったら |
+| `references/catalog/glossary.json` | 用語、ID体系、処理事例（指示 → テーブル別の計算式）、業務ルール | 集計・用語の質問 |
+| `references/catalog/relationships.json` | ER（結合キーとカーディナリティ） | JOIN するとき |
+| `references/catalog/lineage.json` | Source / Workflow / Saved Query / Parent Segment とテーブルの流れ | 由来・影響範囲の質問 |
+| `references/catalog/assets.json` | Source、Workflow、Saved Query、Parent Segment の定義 | 更新タイミング・処理内容の質問 |
+| `references/catalog/CHANGELOG.md` | リビジョンごとの変更差分 | 「最近何が変わった？」 |
+
+## 回答の手順
+
+1. `references/INDEX.md` を読み、質問に出てくる言葉を **用語（aliases を含む）・処理事例の instruction/aliases・テーブル論理名・カラム論理名** と突き合わせる。
+2. **集計の指示**（「売上の合計を出して」など）は、まず `glossary.json` の `recipes` を探す。
+   - 同じ指示でもテーブルごとに計算式が違う。`variants` から、質問の粒度（チャネル横断か、EC だけか、商品別か など）に合うテーブルを選ぶ。
+   - 候補が複数あって質問から決められないときは、候補ごとの違い（`notes` / `conditions`）を短く示してユーザーに選んでもらう。`notes` に「標準」「迷ったらこれ」とある variant は既定として提案してよい。
+   - `（使用不可）` と書かれた variant や notes の注意書きは必ず守る。
+   - recipe が無い指示は、テーブル JSON の説明・カラム説明から組み立て、「カタログに処理事例が無いため推定した」と明記する。
+3. 使うテーブルの JSON を開き、カラムの `logical_name`・`description`・`values`（コード値）・`pii` を確認する。
+4. **ID体系を混ぜない**。カラムの `id_system` が違うもの同士を直接 JOIN しない。`relationships.json` に定義された結合だけを使い、必要なら対応表テーブルを経由する。会員IDの種類が質問から判別できないときはユーザーに確認する。
+5. `glossary.json` の `rules`（キャンセル除外、タイムゾーンなど）を対象テーブルに適用する。
+6. SQL は Trino で書く。`time` 列があるテーブルは `td_interval(time, '<範囲>', 'JST')` などで期間を絞り、パーティションを効かせる。テーブルの `sample_queries` を書き方の手本にする。
+7. 回答には次を含める。
+   - 使ったテーブル（物理名と論理名）と、選んだ理由
+   - SQL（コードブロック）
+   - 適用した処理事例・業務ルール・前提
+   - `カタログ {{revision}} に基づく` という出典表記
+
+## クエリの実行
+
+- ユーザーが実行を求めたときだけ、`tdx query` で **読み取り専用の SELECT** を実行する。`INSERT` / `CREATE` / `DELETE` / `tdx wf run` などの書き込み・実行系は行わない。
+- 結果の確認は `LIMIT` を付け、個人情報（`pii` が `personal` / `sensitive` のカラム）は集計値で返し、個票を出力しない。
+
+## カタログの限界と更新
+
+- 質問の対象がカタログに無い、またはカタログと実データが食い違う（カラムが無い、型が違う）場合は、その事実を伝え、`treasure-ai-data-catalog-builder` スキルでカタログを更新するよう案内する。
+- `logical_name_status: needs_review` の論理名は「要確認」と添えて使う。
+- リビジョンの作成日が古い（目安 90 日超）場合は、内容が古い可能性を一言添える。
+- 人が見やすい画面で確認したい場合は、カタログ ZIP を https://tsukaharakazuki.github.io/treasure-ai-data-catalog/ で開くよう案内する。

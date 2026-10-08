@@ -1,0 +1,136 @@
+{
+  "database": "raw_ec",
+  "name": "shopify_orders",
+  "logical_name": "EC注文（Shopify）",
+  "kind": "source",
+  "description": "Shopify から日次で取り込む EC 注文ヘッダ。1行 = 1注文。キャンセル注文も含む。",
+  "usage": [
+    "EC売上の日次集計",
+    "注文単位の購買分析",
+    "キャンセル率のモニタリング"
+  ],
+  "tags": [
+    "EC",
+    "注文",
+    "Shopify"
+  ],
+  "owner": "EC推進部",
+  "update_frequency": "日次 04:00 JST",
+  "row_count": 1284503,
+  "last_updated": "2026-10-08T19:10:00Z",
+  "primary_key": [
+    "order_id"
+  ],
+  "console_url": "https://console.treasuredata.com/app/databases/raw_ec/tables/shopify_orders",
+  "columns": [
+    {
+      "name": "order_id",
+      "type": "varchar",
+      "logical_name": "注文ID",
+      "logical_name_status": "confirmed",
+      "description": "Shopify の注文番号（#付きを除去済み）",
+      "is_primary_key": true,
+      "pii": "none"
+    },
+    {
+      "name": "customer_id",
+      "type": "varchar",
+      "logical_name": "EC会員番号",
+      "logical_name_status": "confirmed",
+      "description": "Shopify 側の会員番号。統合会員IDとは別体系。",
+      "id_system": "ec_customer_id",
+      "pii": "identifier",
+      "stats": {
+        "null_ratio": 0.08,
+        "min_length": 8,
+        "max_length": 8,
+        "pattern": "\"C\" + 7桁の数字"
+      }
+    },
+    {
+      "name": "order_total",
+      "type": "double",
+      "logical_name": "注文合計金額（税込）",
+      "logical_name_status": "confirmed",
+      "description": "送料・割引適用後の税込合計。明細の合計とは一致しないことがある。"
+    },
+    {
+      "name": "status",
+      "type": "varchar",
+      "logical_name": "注文ステータス",
+      "logical_name_status": "confirmed",
+      "values": {
+        "paid": "支払済",
+        "fulfilled": "出荷済",
+        "cancelled": "キャンセル",
+        "refunded": "返金済"
+      }
+    },
+    {
+      "name": "ordered_at",
+      "type": "varchar",
+      "logical_name": "注文日時（JST文字列）",
+      "logical_name_status": "confirmed",
+      "description": "yyyy-MM-dd HH:mm:ss（JST）"
+    },
+    {
+      "name": "coupon_code",
+      "type": "varchar",
+      "logical_name": "クーポンコード",
+      "logical_name_status": "confirmed",
+      "description": "注文に適用されたクーポン。未使用は NULL。"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ],
+  "samples": {
+    "captured_at": "2026-10-08",
+    "masked_columns": [
+      "customer_id"
+    ],
+    "rows": [
+      {
+        "order_id": "100245",
+        "customer_id": "C00****1",
+        "order_total": 5980,
+        "status": "fulfilled",
+        "ordered_at": "2026-10-07 21:14:03",
+        "time": 1759839243
+      },
+      {
+        "order_id": "100246",
+        "customer_id": null,
+        "order_total": 2200,
+        "status": "paid",
+        "ordered_at": "2026-10-07 21:20:41",
+        "time": 1759839641
+      },
+      {
+        "order_id": "100247",
+        "customer_id": "C01****8",
+        "order_total": 12800,
+        "status": "cancelled",
+        "ordered_at": "2026-10-07 22:02:17",
+        "time": 1759842137
+      }
+    ]
+  },
+  "sample_queries": [
+    {
+      "title": "直近7日の日別EC売上（キャンセル除外）",
+      "engine": "trino",
+      "sql": "SELECT substr(ordered_at, 1, 10) AS order_date,\n       SUM(order_total) AS sales\nFROM raw_ec.shopify_orders\nWHERE td_interval(time, '-7d', 'JST')\n  AND status NOT IN ('cancelled', 'refunded')\nGROUP BY 1\nORDER BY 1"
+    },
+    {
+      "title": "ステータス別の注文件数（今月）",
+      "engine": "trino",
+      "sql": "SELECT status, COUNT(*) AS orders\nFROM raw_ec.shopify_orders\nWHERE td_interval(time, '0M', 'JST')\nGROUP BY 1\nORDER BY 2 DESC"
+    }
+  ]
+}

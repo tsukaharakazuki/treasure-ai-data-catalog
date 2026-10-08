@@ -1,0 +1,62 @@
+{
+  "database": "raw_ec",
+  "name": "web_pageviews",
+  "logical_name": "Web閲覧ログ",
+  "kind": "source",
+  "description": "TD JS SDK で収集した EC サイトのページビュー。ログイン時のみ member_id が入る。",
+  "usage": [
+    "閲覧行動のセグメント",
+    "カゴ落ち分析"
+  ],
+  "tags": [
+    "Web",
+    "行動ログ"
+  ],
+  "owner": "EC推進部",
+  "update_frequency": "ストリーミング",
+  "columns": [
+    {
+      "name": "td_client_id",
+      "type": "varchar",
+      "logical_name": "ブラウザID（TD Client ID）",
+      "logical_name_status": "confirmed",
+      "id_system": "td_client_id",
+      "pii": "identifier"
+    },
+    {
+      "name": "member_id",
+      "type": "varchar",
+      "logical_name": "統合会員ID",
+      "logical_name_status": "confirmed",
+      "id_system": "member_id",
+      "pii": "identifier"
+    },
+    {
+      "name": "td_url",
+      "type": "varchar",
+      "logical_name": "ページURL",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "td_title",
+      "type": "varchar",
+      "logical_name": "ページタイトル",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ],
+  "sample_queries": [
+    {
+      "title": "日別UU（直近14日）",
+      "engine": "trino",
+      "sql": "SELECT td_time_string(time, 'd!', 'JST') AS day,\n       approx_distinct(td_client_id) AS uu\nFROM raw_ec.web_pageviews\nWHERE td_interval(time, '-14d', 'JST')\nGROUP BY 1\nORDER BY 1"
+    }
+  ]
+}

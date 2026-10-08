@@ -1,0 +1,102 @@
+{
+  "database": "raw_ec",
+  "name": "pos_transactions",
+  "logical_name": "店舗POS取引",
+  "kind": "source",
+  "description": "全店舗の POS レシート。S3 経由で日次取込。1行 = 1レシート。",
+  "usage": [
+    "店舗売上の集計",
+    "ポイントカード会員の来店分析"
+  ],
+  "tags": [
+    "店舗",
+    "POS"
+  ],
+  "owner": "店舗運営部",
+  "update_frequency": "日次 05:00 JST",
+  "row_count": 8820331,
+  "primary_key": [
+    "receipt_no"
+  ],
+  "columns": [
+    {
+      "name": "receipt_no",
+      "type": "varchar",
+      "logical_name": "レシート番号",
+      "logical_name_status": "confirmed",
+      "is_primary_key": true
+    },
+    {
+      "name": "store_code",
+      "type": "varchar",
+      "logical_name": "店舗コード",
+      "logical_name_status": "confirmed",
+      "description": "4桁。先頭が 9 の店舗はアウトレット。"
+    },
+    {
+      "name": "member_card_no",
+      "type": "varchar",
+      "logical_name": "ポイントカード番号",
+      "logical_name_status": "confirmed",
+      "id_system": "point_card_no",
+      "pii": "identifier",
+      "stats": {
+        "null_ratio": 0.41,
+        "min_length": 13,
+        "max_length": 13,
+        "pattern": "\"29\" で始まる13桁の数字"
+      }
+    },
+    {
+      "name": "amount",
+      "type": "bigint",
+      "logical_name": "レシート合計金額（税込）",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "txn_at",
+      "type": "varchar",
+      "logical_name": "取引日時（JST文字列）",
+      "logical_name_status": "confirmed"
+    },
+    {
+      "name": "time",
+      "type": "bigint",
+      "logical_name": "データ取込時刻（UNIX秒）",
+      "logical_name_status": "confirmed",
+      "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
+      "is_partition_key": true
+    }
+  ],
+  "samples": {
+    "captured_at": "2026-10-08",
+    "masked_columns": [
+      "member_card_no"
+    ],
+    "rows": [
+      {
+        "receipt_no": "0012-20261007-0042",
+        "store_code": "0012",
+        "member_card_no": "29**********3",
+        "amount": 3480,
+        "txn_at": "2026-10-07 13:42:10",
+        "time": 1759812130
+      },
+      {
+        "receipt_no": "0012-20261007-0043",
+        "store_code": "0012",
+        "member_card_no": null,
+        "amount": 880,
+        "txn_at": "2026-10-07 13:45:55",
+        "time": 1759812355
+      }
+    ]
+  },
+  "sample_queries": [
+    {
+      "title": "店舗別売上（前日）",
+      "engine": "trino",
+      "sql": "SELECT store_code, SUM(amount) AS sales, COUNT(*) AS receipts\nFROM raw_ec.pos_transactions\nWHERE td_interval(time, '-1d', 'JST')\nGROUP BY 1\nORDER BY 2 DESC"
+    }
+  ]
+}

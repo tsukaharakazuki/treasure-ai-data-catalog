@@ -1,0 +1,43 @@
+{
+  "revisions": [
+    {
+      "id": "r0001",
+      "number": 1,
+      "generated_at": "2026-09-01T09:00:00+09:00",
+      "generated_by": "Treasure AI Studio",
+      "note": "初版",
+      "summary": {
+        "tables_added": 8,
+        "tables_removed": 0,
+        "tables_changed": 0,
+        "columns_added": 0,
+        "columns_removed": 0,
+        "columns_changed": 0,
+        "lineage_changes": 17,
+        "relationship_changes": 7,
+        "glossary_changes": 10,
+        "asset_changes": 7
+      }
+    },
+    {
+      "id": "r0002",
+      "number": 2,
+      "generated_at": "2026-10-01T09:00:00+09:00",
+      "generated_by": "Treasure AI Studio",
+      "note": "日次売上サマリ追加・性別コード確定",
+      "previous": "r0001",
+      "summary": {
+        "tables_added": 1,
+        "tables_removed": 0,
+        "tables_changed": 2,
+        "columns_added": 1,
+        "columns_removed": 0,
+        "columns_changed": 1,
+        "lineage_changes": 3,
+        "relationship_changes": 0,
+        "glossary_changes": 2,
+        "asset_changes": 1
+      }
+    }
+  ]
+}

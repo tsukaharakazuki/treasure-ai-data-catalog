@@ -1,0 +1,47 @@
+{
+  "format": "treasure-ai-data-catalog",
+  "version": 1,
+  "name": "minato",
+  "display_name": "ミナト雑貨 データカタログ（サンプル）",
+  "customer": "ミナト雑貨株式会社（架空）",
+  "service": "ミナト雑貨 EC・店舗",
+  "language": "ja",
+  "revision": {
+    "id": "r0002",
+    "number": 2,
+    "generated_at": "2026-10-01T09:00:00+09:00",
+    "generated_by": "Treasure AI Studio",
+    "note": "日次売上サマリ追加・性別コード確定"
+  },
+  "td": {
+    "site": "us01",
+    "console_base_url": "https://console.treasuredata.com"
+  },
+  "scope": {
+    "databases": [
+      "raw_ec",
+      "ec_dwh",
+      "cdp_audience_1001"
+    ],
+    "parent_segments": [
+      "ミナト会員"
+    ],
+    "workflow_projects": [
+      "ec_daily"
+    ],
+    "saved_queries": [
+      "daily_sales_summary"
+    ],
+    "sources": [
+      "shopify_daily_import",
+      "pos_s3_import",
+      "sfdc_members"
+    ],
+    "inputs": []
+  },
+  "privacy": {
+    "sample_rows_max": 5,
+    "masking_policy": "氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする"
+  },
+  "description": "架空の小売企業を想定した合成サンプルです。実在の企業・人物・値は含みません。"
+}
