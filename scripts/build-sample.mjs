@@ -235,7 +235,24 @@ function tables(revision) {
   const all = [shopifyOrders, orderItems, pos, crm, web, unified, master, customers, behaviorOrders, behaviorWeb, ...(revision >= 2 ? [summary] : [])]
   return all.map((table) => {
     const [rowCount, maxTime] = measured[table.name] ?? []
-    return rowCount === undefined ? table : { ...table, row_count: rowCount, ...(maxTime ? { last_updated_unixtime: maxTime } : {}) }
+    const withStats = rowCount === undefined ? table : { ...table, row_count: rowCount, ...(maxTime ? { last_updated_unixtime: maxTime } : {}) }
+    return withStats.samples ? { ...withStats, samples: { ...withStats.samples, rows: tenRows(withStats.samples.rows, withStats.columns) } } : withStats
+  })
+}
+
+// Pad the hand-written sample rows to 10, as import-samples would store them:
+// every column present, unmasked ids bumped so rows stay distinct.
+function tenRows(rows, columns) {
+  const bump = (value, step) => {
+    if (typeof value === 'number') return value > 1e9 ? value - step * 637 : value
+    if (typeof value !== 'string' || /[*]|masked/.test(value)) return value
+    const match = /^(.*?)(\d+)$/.exec(value)
+    return match ? `${match[1]}${String(Number(match[2]) + step).padStart(match[2].length, '0')}` : value
+  }
+  return Array.from({ length: 10 }, (_, index) => {
+    const base = rows[index % rows.length]
+    const step = Math.floor(index / rows.length) * rows.length + (index % rows.length) - (index % rows.length)
+    return Object.fromEntries(columns.map((column) => [column.name, index < rows.length ? base[column.name] ?? null : bump(base[column.name] ?? null, step)]))
   })
 }
 

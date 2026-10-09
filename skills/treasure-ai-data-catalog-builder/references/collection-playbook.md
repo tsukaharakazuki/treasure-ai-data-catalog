@@ -244,14 +244,18 @@ FROM a LEFT JOIN b ON a.v = b.v
 
 ### マスク付きサンプル
 
-`references/metadata-rules.md` の「サンプルのマスク」で SELECT 句を組み立てる。
+**SQL は CLI で生成する**（`references/metadata-rules.md` の「サンプルのマスク」を全カラムに機械的に適用する）。
 
-```sql
-SELECT <マスク式を含む列リスト>
-FROM <db>.<table>
-WHERE td_interval(time, '-7d')
-LIMIT 10
+```bash
+node $SKILL/scripts/catalog-cli.mjs sample-sql data-catalog/catalog [--table <db>.<table>] [--range -30d|-365d|all]
+tdx query -f data-catalog/_work/samples/<db>.<table>.sql --json --output data-catalog/_work/samples/<db>.<table>.json
+node $SKILL/scripts/catalog-cli.mjs import-samples data-catalog/catalog --table <db>.<table> --file data-catalog/_work/samples/<db>.<table>.json
 ```
+
+- 生成される SQL: 全カラムを列挙し、`pii` とカラム名（email / phone / name / address / birth / notes など）から判定したマスク式を付け、`WHERE td_interval(time, '<range>') ORDER BY time DESC LIMIT 10`（`time` 列が無いテーブルは条件なし）
+- 列のマスク判定を変えたいときは、テーブル JSON の `pii` を直してから SQL を作り直す
+- `import-samples` は結果の先頭 10 行を、全カラム分そろえて `samples.rows` に書き、取り込み時にもう一度マスクする
+- `_work/` はカタログの外なので ZIP には入らない
 
 ### サンプルクエリの検証
 

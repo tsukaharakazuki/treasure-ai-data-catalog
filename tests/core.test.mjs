@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -12,6 +12,8 @@ import { inferRelationships as inferViewer, normalizeRelationship, relationshipI
 import {
   diffBundles,
   inferRelationships as inferCli,
+  maskLevel,
+  sampleSql,
   normalizeRelationship as normalizeCli,
   lintBundle,
   main,
@@ -211,4 +213,58 @@ test('row counts and MAX(time) written under other keys or as strings are normal
   assert.equal(loaded.last_updated_unixtime, 1791486600)
   files.set(path, JSON.stringify({ ...table, last_updated: 1791486600 }))
   assert.equal(loadCatalogFromFiles(files).tables.find((item) => item.name === 'shopify_orders').last_updated_unixtime, 1791486600)
+})
+
+test('sample SQL masks every column by pii and name, and import re-masks raw values', () => {
+  const table = {
+    database: 'db', name: 't',
+    columns: [
+      { name: 'member_id', type: 'varchar', pii: 'identifier' },
+      { name: 'email', type: 'varchar' },
+      { name: 'phone_1', type: 'varchar' },
+      { name: 'birth_date', type: 'varchar' },
+      { name: 'api_key', type: 'varchar' },
+      { name: 'tags', type: 'array(varchar)' },
+      { name: 'formid', type: 'bigint' },
+      { name: 'time', type: 'bigint' },
+    ],
+  }
+  assert.deepEqual(table.columns.map(maskLevel), ['identifier', 'personal', 'personal', 'sensitive', 'exclude', 'complex', 'none', 'none'])
+  const sql = sampleSql(table)
+  assert.match(sql, /td_interval\(time, '-30d'\)/)
+  assert.match(sql, /ORDER BY time DESC\nLIMIT 10/)
+  assert.match(sql, /NULL AS "api_key"/)
+  assert.match(sql, /\$1\*\*\*@\*\*\*/)
+  assert.ok(!/td_interval/.test(sampleSql(table, { range: 'all' })))
+
+  const work = mkdtempSync(join(tmpdir(), 'catalog-samples-'))
+  const dir = join(work, 'catalog')
+  main(['init', dir, '--name', 'x'])
+  mkdirSync(join(dir, 'tables/db'), { recursive: true })
+  writeFileSync(join(dir, 'tables/db/t.json'), JSON.stringify({ ...table, row_count: 20 }))
+  const result = join(work, 'result.json')
+  const raw = Array.from({ length: 12 }, (_, index) => ({ member_id: `1234567890${index}`, email: 'taro@example.com', phone_1: '0312345678', birth_date: '1990-01-01', api_key: 'abc', tags: ['a'], formid: index, time: 1791486600 }))
+  writeFileSync(result, JSON.stringify(raw))
+  main(['import-samples', dir, '--table', 'db.t', '--file', result])
+  const imported = JSON.parse(readFileSync(join(dir, 'tables/db/t.json'), 'utf8')).samples
+  assert.equal(imported.rows.length, 10)
+  assert.equal(imported.rows[0].member_id, '12****0')
+  assert.equal(imported.rows[0].email, 't***@***')
+  assert.equal(imported.rows[0].phone_1, '[masked]')
+  assert.equal(imported.rows[0].api_key, null)
+  assert.equal(imported.rows[3].formid, 3)
+  const issues = lintBundle(readCatalogDir(dir)).filter((issue) => issue.path === 'db.t' && issue.severity !== 'info')
+  assert.ok(!issues.some((issue) => /サンプル|マスク/.test(issue.message)), JSON.stringify(issues))
+})
+
+test('lint flags short or column-poor samples and off-convention lineage ids', () => {
+  const bundle = readCatalogDir(SAMPLE_DIR)
+  const orders = bundle.tables.find((table) => table.name === 'shopify_orders')
+  orders.samples.rows = [{ order_id: '1' }]
+  bundle.lineage.nodes.push({ id: 'src_x', type: 'source', label: 'x' }, { id: 'out_customers', type: 'table', label: 'c', ref: 'raw_ec.crm_members' })
+  const messages = lintBundle(bundle).map((issue) => issue.message)
+  assert.ok(messages.some((message) => message.includes('サンプルが 1 行しかありません')))
+  assert.ok(messages.some((message) => message.includes('カラムがありません（全カラムを取得')))
+  assert.ok(messages.some((message) => message.includes('"src_x" は "source:<id>"')))
+  assert.ok(messages.some((message) => message.includes('"out_customers" は "table:<db>.<table>"')))
 })

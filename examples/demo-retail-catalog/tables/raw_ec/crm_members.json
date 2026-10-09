@@ -117,6 +117,105 @@
         "pref": "東京都",
         "registered_at": "2019-04-12",
         "time": 1759777200
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "3",
+        "pref": "東京都",
+        "registered_at": "2019-04-13",
+        "time": 1759776563
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "4",
+        "pref": "東京都",
+        "registered_at": "2019-04-14",
+        "time": 1759775926
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "5",
+        "pref": "東京都",
+        "registered_at": "2019-04-15",
+        "time": 1759775289
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "6",
+        "pref": "東京都",
+        "registered_at": "2019-04-16",
+        "time": 1759774652
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "7",
+        "pref": "東京都",
+        "registered_at": "2019-04-17",
+        "time": 1759774015
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "8",
+        "pref": "東京都",
+        "registered_at": "2019-04-18",
+        "time": 1759773378
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "9",
+        "pref": "東京都",
+        "registered_at": "2019-04-19",
+        "time": 1759772741
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "10",
+        "pref": "東京都",
+        "registered_at": "2019-04-20",
+        "time": 1759772104
+      },
+      {
+        "member_id": "10****0021",
+        "ec_customer_id": "C00****1",
+        "card_no": "29**********3",
+        "email": "t***@example.com",
+        "birth_date": "19**-**-**",
+        "gender_code": "11",
+        "pref": "東京都",
+        "registered_at": "2019-04-21",
+        "time": 1759771467
       }
     ]
   },

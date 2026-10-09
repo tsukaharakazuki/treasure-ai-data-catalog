@@ -8,6 +8,8 @@
 //   node catalog-cli.mjs pack <dir> --out <file.zip> [--force]
 //   node catalog-cli.mjs unpack <file.zip> <dir>
 //   node catalog-cli.mjs relationships <dir> [--write]   # ID体系から ER 候補と一致率検証 SQL を出す
+//   node catalog-cli.mjs sample-sql <dir> [--table db.t] [--range -30d|all] [--out <dir>]   # マスク付きサンプル取得 SQL
+//   node catalog-cli.mjs import-samples <dir> --table db.t --file <tdx query --json の出力> [--note "..."]
 //   node catalog-cli.mjs skill <dir> --out <skills-root-or-skill-dir> [--zip <skill.zip>] [--template <SKILL.md.tmpl>]
 //
 // This tool only touches local files. It never calls Treasure Data or tdx.
@@ -204,6 +206,67 @@ const SECRET_PATTERNS = [
 const MASK_HINT = /[*＊●×]|\[masked\]|\*\*\*/i
 const PII_SAMPLE_LEVELS = new Set(['personal', 'sensitive'])
 
+// ---------------------------------------------------------------------------
+// Sample masking (mirrors references/metadata-rules.md「サンプルのマスク」)
+
+const EXCLUDE_NAME = /(^|_)(password|passwd|pwd|token|secret|api_?key|access_?key)(_|$)/i
+const PERSONAL_NAME = /(^|_)(e?mail(_\d+)?|email_address|tel|phone(_\d+)?|mobile|fax|address|addr|zip|postal|postcode|first_?name(_\d+)?|last_?name(_\d+)?|full_?name|kana|sei|mei|name_kanji|td_ip|ip_address|lat|lon|latitude|longitude|comment|memo|notes?(_c)?|body|message|inquiry|submissionvalues)(_|$)/i
+const SENSITIVE_NAME = /(^|_)(birth(day|date|_date)?|dob|credit|card_number|cvv)(_|$)/i
+const COMPLEX_TYPE = /^(array|map|row|json)/i
+
+/** none / identifier / personal / sensitive / exclude for one column. */
+export function maskLevel(column) {
+  if (EXCLUDE_NAME.test(column.name)) return 'exclude'
+  if (column.pii === 'sensitive' || SENSITIVE_NAME.test(column.name)) return 'sensitive'
+  if (column.pii === 'personal' || PERSONAL_NAME.test(column.name)) return 'personal'
+  if (column.pii === 'identifier') return 'identifier'
+  if (COMPLEX_TYPE.test(column.type ?? '')) return 'complex'
+  return 'none'
+}
+
+const quoteIdent = (name) => `"${String(name).replace(/"/g, '""')}"`
+
+export function maskExpression(column) {
+  const c = quoteIdent(column.name)
+  const v = `CAST(${c} AS varchar)`
+  switch (maskLevel(column)) {
+    case 'exclude': return `NULL AS ${c}`
+    case 'sensitive':
+    case 'complex': return `CASE WHEN ${c} IS NULL THEN NULL ELSE '[masked]' END AS ${c}`
+    case 'personal':
+      return /mail/i.test(column.name)
+        ? `CASE WHEN ${c} IS NULL THEN NULL ELSE regexp_replace(${v}, '^(.)[^@]*@.*$', '$1***@***') END AS ${c}`
+        : `CASE WHEN ${c} IS NULL THEN NULL ELSE '[masked]' END AS ${c}`
+    case 'identifier':
+      return `CASE WHEN ${c} IS NULL THEN NULL WHEN length(${v}) <= 6 THEN '****' ELSE concat(substr(${v}, 1, 2), '****', substr(${v}, -1)) END AS ${c}`
+    default: return c
+  }
+}
+
+export function maskValue(column, value) {
+  if (value === null || value === undefined) return value
+  const text = typeof value === 'object' ? JSON.stringify(value) : String(value)
+  switch (maskLevel(column)) {
+    case 'exclude': return null
+    case 'sensitive':
+    case 'complex': return MASK_HINT.test(text) ? value : '[masked]'
+    case 'personal':
+      if (MASK_HINT.test(text)) return value
+      return /mail/i.test(column.name) && text.includes('@') ? `${text[0]}***@***` : '[masked]'
+    case 'identifier':
+      if (MASK_HINT.test(text)) return value
+      return text.length <= 6 ? '****' : `${text.slice(0, 2)}****${text.slice(-1)}`
+    default: return value
+  }
+}
+
+export function sampleSql(table, { range = '-30d', limit = 10 } = {}) {
+  const hasTime = table.columns.some((column) => column.name === 'time')
+  const where = hasTime && range !== 'all' ? `\nWHERE td_interval(time, '${range}')` : ''
+  const order = hasTime ? '\nORDER BY time DESC' : ''
+  return `-- ${tableKey(table)} のマスク付きサンプル（${limit} 行）\nSELECT\n  ${table.columns.map(maskExpression).join(',\n  ')}\nFROM ${table.database}.${quoteIdent(table.name)}${where}${order}\nLIMIT ${limit}\n`
+}
+
 export function lintBundle(bundle) {
   const issues = []
   const push = (severity, path, message) => issues.push({ severity, path, message })
@@ -238,6 +301,16 @@ export function lintBundle(bundle) {
     }
     const rows = arr(table.samples?.rows)
     if (rows.length > maxRows) push('error', key, `サンプルは ${maxRows} 行までです（現在 ${rows.length} 行）`)
+    const expectedRows = Math.min(maxRows, typeof table.row_count === 'number' ? table.row_count : maxRows)
+    if (!table.samples) push('info', key, 'サンプルデータがありません（含めない方針なら問題なし）')
+    else if (rows.length < expectedRows && !table.samples.note) {
+      push('warning', key, `サンプルが ${rows.length} 行しかありません（${expectedRows} 行取得してください。少ない理由があれば samples.note に書く）。catalog-cli.mjs sample-sql / import-samples を使う`)
+    }
+    if (rows.length && table.columns.length) {
+      const covered = new Set(rows.flatMap((row) => Object.keys(row ?? {})))
+      const missing = table.columns.filter((column) => !covered.has(column.name)).length
+      if (missing > table.columns.length / 2) push('warning', key, `サンプル行に ${table.columns.length} カラム中 ${missing} カラムがありません（全カラムを取得してください）`)
+    }
     for (const column of table.columns) {
       if (!PII_SAMPLE_LEVELS.has(column.pii)) continue
       for (const row of rows) {
@@ -258,6 +331,11 @@ export function lintBundle(bundle) {
     if (nodeIds.has(node.id)) push('error', 'lineage.json', `ノード id "${node.id}" が重複しています`)
     nodeIds.add(node.id)
     if (node.type === 'table' && node.ref && !keys.has(node.ref)) push('info', 'lineage.json', `テーブルノード "${node.ref}" はカタログ未登録です`)
+    if (node.type === 'table' && node.id !== `table:${node.ref ?? node.id.replace(/^table:/, '')}`) {
+      push('warning', 'lineage.json', `テーブルノード id "${node.id}" は "table:<db>.<table>"（ref と同じ名前）にしてください`)
+    } else if (node.type && node.type !== 'table' && !node.id.startsWith(`${node.type}:`)) {
+      push('warning', 'lineage.json', `ノード id "${node.id}" は "${node.type}:<id>" の形にしてください（ビューアーのリンクと差分に使います）`)
+    }
   }
   for (const edge of bundle.lineage.edges) {
     for (const end of [edge.from, edge.to]) if (!nodeIds.has(end)) push('warning', 'lineage.json', `エッジが未定義ノード "${end}" を参照しています`)
@@ -713,6 +791,65 @@ function copyTree(source, target, filter) {
   }
 }
 
+function findTable(bundle, key) {
+  const table = bundle.tables.find((item) => tableKey(item) === key)
+  if (!table) throw new Error(`テーブル ${key} がカタログにありません`)
+  return table
+}
+
+function cmdSampleSql(dir, flags) {
+  const bundle = readCatalogDir(dir)
+  const limit = bundle.catalog.privacy?.sample_rows_max ?? 10
+  const tables = typeof flags.table === 'string' ? [findTable(bundle, flags.table)] : bundle.tables
+  const out = typeof flags.out === 'string' ? flags.out : join(dirname(resolve(dir)), '_work/samples')
+  mkdirSync(out, { recursive: true })
+  for (const table of tables) {
+    const path = join(out, `${tableKey(table)}.sql`)
+    writeFileSync(path, sampleSql(table, { range: typeof flags.range === 'string' ? flags.range : '-30d', limit }))
+    console.log(`${path}\n  tdx query -f ${path} --json --output ${join(out, `${tableKey(table)}.json`)}`)
+  }
+  console.log(`\n${tables.length} テーブル分の SQL を作成しました。結果は import-samples で取り込んでください。0 行のときは --range -365d または --range all で作り直す。`)
+}
+
+function parseRows(text) {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+  try {
+    const value = JSON.parse(trimmed)
+    if (Array.isArray(value)) return value
+    if (Array.isArray(value?.rows)) return value.rows
+    if (Array.isArray(value?.data) && Array.isArray(value?.columns)) {
+      return value.data.map((row) => Object.fromEntries(value.columns.map((column, index) => [column.name ?? column, row[index]])))
+    }
+  } catch {
+    return trimmed.split('\n').filter(Boolean).map((line) => JSON.parse(line))
+  }
+  throw new Error('結果ファイルの形式を読み取れません（tdx query --json の出力を指定してください）')
+}
+
+function cmdImportSamples(dir, flags) {
+  if (typeof flags.table !== 'string' || typeof flags.file !== 'string') throw new Error('--table <db.table> と --file <result.json> が必要です')
+  const bundle = readCatalogDir(dir)
+  const table = findTable(bundle, flags.table)
+  const limit = bundle.catalog.privacy?.sample_rows_max ?? 10
+  const columns = new Map(table.columns.map((column) => [column.name, column]))
+  const masked = table.columns.filter((column) => maskLevel(column) !== 'none').map((column) => column.name)
+  // Mask again on import so a hand-written query cannot leak raw values.
+  const rows = parseRows(readFileSync(flags.file, 'utf8')).slice(0, limit).map((row) =>
+    Object.fromEntries(table.columns.map((column) => [column.name, maskValue(column, row?.[column.name] ?? null)])))
+  const unknown = rows.length ? Object.keys(parseRows(readFileSync(flags.file, 'utf8'))[0] ?? {}).filter((name) => !columns.has(name)) : []
+  const path = join(dir, tablePath(table))
+  const current = readJson(path)
+  current.samples = {
+    captured_at: new Date().toISOString().slice(0, 10),
+    masked_columns: masked,
+    rows,
+    ...(typeof flags.note === 'string' ? { note: flags.note } : rows.length < limit ? { note: `取得できたのは ${rows.length} 行` } : {}),
+  }
+  writeJson(path, current)
+  console.log(`${flags.table}: ${rows.length} 行を取り込みました（マスク ${masked.length} カラム）${unknown.length ? `。カタログに無いカラムは無視: ${unknown.join(', ')}` : ''}`)
+}
+
 function cmdRelationships(dir, flags) {
   const bundle = readCatalogDir(dir)
   const raw = relationshipItems(existsSync(join(dir, 'relationships.json')) ? readJson(join(dir, 'relationships.json')) : [])
@@ -778,9 +915,11 @@ export function main(argv) {
     case 'pack': return cmdPack(positional[0], flags)
     case 'unpack': return cmdUnpack(positional[0], positional[1])
     case 'relationships': return cmdRelationships(positional[0], flags)
+    case 'sample-sql': return cmdSampleSql(positional[0], flags)
+    case 'import-samples': return cmdImportSamples(positional[0], flags)
     case 'skill': return cmdSkill(positional[0], flags)
     default:
-      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split("\n").slice(1, 13).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
+      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split("\n").slice(1, 15).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
       if (command && command !== 'help') process.exitCode = 1
   }
 }

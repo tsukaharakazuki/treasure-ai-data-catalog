@@ -82,7 +82,15 @@ Parent Segment を TD コンソールの URL で指定された場合、URL の�
 1. スキーマ（information_schema または `tdx describe <db>.<table> --json`）
 2. 行数と最終更新をクエリで取得する: `SELECT COUNT(*), MAX(time)`（結果は **数値のまま** `row_count` と `last_updated_unixtime` に入れる。キー名を変えない・文字列にしない。`time` 列が無ければ行数のみ）。オーナーは取得しない。validate がこの 2 つの欠けを warning にするので、残さない
 3. ID 候補・コード値候補カラムの軽量プロファイル（桁数・形式・NULL 率・値の種類）
-4. マスク付きサンプル（含める場合のみ、10行。`LIMIT 10`）
+4. マスク付きサンプル（含める場合のみ、**全カラム × 10 行**）。マスク式は手で書かず CLI で作る:
+   ```bash
+   node $SKILL/scripts/catalog-cli.mjs sample-sql data-catalog/catalog            # 全テーブル分の SQL を data-catalog/_work/samples/ に出力
+   tdx query -f data-catalog/_work/samples/<db>.<table>.sql --json --output data-catalog/_work/samples/<db>.<table>.json
+   node $SKILL/scripts/catalog-cli.mjs import-samples data-catalog/catalog --table <db>.<table> --file data-catalog/_work/samples/<db>.<table>.json
+   ```
+   - **すべての対象テーブルで実行する**（カラム数が多いテーブルも省略しない）。`samples.rows` を空のまま残さない
+   - 0 行や 10 行未満なら `sample-sql --table <db>.<table> --range -365d`（それでも足りなければ `--range all`）で取り直す。テーブル自体の行数が少ない場合は `--note` に理由を書く
+   - `import-samples` は取り込み時にもう一度マスクする。validate が「行数不足」「カラム欠け」を warning にするので残さない
 5. 論理名・説明・利用用途を `references/metadata-rules.md` に従って作成
 
 書き出しは `tables/<database>/<table>.json`（形式は `references/catalog-format.md`）。
@@ -144,12 +152,13 @@ node $SKILL/scripts/catalog-cli.mjs skill    data-catalog/catalog --out <skills 
 
 1. 前回の ZIP を展開する: `node $SKILL/scripts/catalog-cli.mjs unpack <前回.zip> data-catalog/catalog`
 2. `catalog.json` の `scope` に記録された対象で、手順 4〜8 を再実行する。以前の版で作ったカタログの `privacy.sample_rows_max` が 10 未満なら 10 に上げ、サンプルを 10 行で取り直す。`row_count` / `last_updated_unixtime` が無いテーブルは必ず取得して埋める。
-3. **人が確定した情報を消さない**:
+3. **欠けを埋める**: `validate` の warning（サンプルの行数不足・カラム欠け、`row_count` / `last_updated_unixtime` の欠け、規約外のノード id）をすべて解消する。サンプルは `sample-sql` → `tdx query` → `import-samples` で全テーブル取り直す。リネージのノード id は `table:<db>.<table>` / `source:<id>` などの規約に直し、エッジの `from` / `to` も合わせて書き換える。
+4. **人が確定した情報を消さない**:
    - `logical_name_status: confirmed` の論理名・説明・`id_system`・`values` は、カラムの型が変わっていない限り引き継ぐ
    - 用語・処理事例・業務ルール・ID体系はユーザーの指示なく削除しない
    - 消えたテーブル・カラムは削除してよい（差分に「削除」として残る）
-4. `node $SKILL/scripts/catalog-cli.mjs diff data-catalog/catalog` で前回からの差分を見せ、内容をユーザーに確認する。
-5. 確認が取れたら `release --note "<変更の要約>"` → `pack` → `skill` を実行し、新しいリビジョン番号で報告する。
+5. `node $SKILL/scripts/catalog-cli.mjs diff data-catalog/catalog` で前回からの差分を見せ、内容をユーザーに確認する。
+6. 確認が取れたら `release --note "<変更の要約>"` → `pack` → `skill` を実行し、新しいリビジョン番号で報告する。
 
 ## Parent Segment への反映モード
 

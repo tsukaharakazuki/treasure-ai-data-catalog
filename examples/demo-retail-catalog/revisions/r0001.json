@@ -482,6 +482,105 @@
             "pref": "東京都",
             "registered_at": "2019-04-12",
             "time": 1759777200
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "3",
+            "pref": "東京都",
+            "registered_at": "2019-04-13",
+            "time": 1759776563
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "4",
+            "pref": "東京都",
+            "registered_at": "2019-04-14",
+            "time": 1759775926
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "5",
+            "pref": "東京都",
+            "registered_at": "2019-04-15",
+            "time": 1759775289
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "6",
+            "pref": "東京都",
+            "registered_at": "2019-04-16",
+            "time": 1759774652
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "7",
+            "pref": "東京都",
+            "registered_at": "2019-04-17",
+            "time": 1759774015
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "8",
+            "pref": "東京都",
+            "registered_at": "2019-04-18",
+            "time": 1759773378
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "9",
+            "pref": "東京都",
+            "registered_at": "2019-04-19",
+            "time": 1759772741
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "10",
+            "pref": "東京都",
+            "registered_at": "2019-04-20",
+            "time": 1759772104
+          },
+          {
+            "member_id": "10****0021",
+            "ec_customer_id": "C00****1",
+            "card_no": "29**********3",
+            "email": "t***@example.com",
+            "birth_date": "19**-**-**",
+            "gender_code": "11",
+            "pref": "東京都",
+            "registered_at": "2019-04-21",
+            "time": 1759771467
           }
         ]
       },
@@ -584,6 +683,70 @@
             "amount": 880,
             "txn_at": "2026-10-07 13:45:55",
             "time": 1759812355
+          },
+          {
+            "receipt_no": "0012-20261007-0044",
+            "store_code": "0014",
+            "member_card_no": "29**********3",
+            "amount": 3480,
+            "txn_at": "2026-10-07 13:42:12",
+            "time": 1759810856
+          },
+          {
+            "receipt_no": "0012-20261007-0045",
+            "store_code": "0014",
+            "member_card_no": null,
+            "amount": 880,
+            "txn_at": "2026-10-07 13:45:57",
+            "time": 1759811081
+          },
+          {
+            "receipt_no": "0012-20261007-0046",
+            "store_code": "0016",
+            "member_card_no": "29**********3",
+            "amount": 3480,
+            "txn_at": "2026-10-07 13:42:14",
+            "time": 1759809582
+          },
+          {
+            "receipt_no": "0012-20261007-0047",
+            "store_code": "0016",
+            "member_card_no": null,
+            "amount": 880,
+            "txn_at": "2026-10-07 13:45:59",
+            "time": 1759809807
+          },
+          {
+            "receipt_no": "0012-20261007-0048",
+            "store_code": "0018",
+            "member_card_no": "29**********3",
+            "amount": 3480,
+            "txn_at": "2026-10-07 13:42:16",
+            "time": 1759808308
+          },
+          {
+            "receipt_no": "0012-20261007-0049",
+            "store_code": "0018",
+            "member_card_no": null,
+            "amount": 880,
+            "txn_at": "2026-10-07 13:45:61",
+            "time": 1759808533
+          },
+          {
+            "receipt_no": "0012-20261007-0050",
+            "store_code": "0020",
+            "member_card_no": "29**********3",
+            "amount": 3480,
+            "txn_at": "2026-10-07 13:42:18",
+            "time": 1759807034
+          },
+          {
+            "receipt_no": "0012-20261007-0051",
+            "store_code": "0020",
+            "member_card_no": null,
+            "amount": 880,
+            "txn_at": "2026-10-07 13:45:63",
+            "time": 1759807259
           }
         ]
       },
@@ -686,6 +849,78 @@
             "quantity": 1,
             "discount_amount": 0,
             "time": 1759839243
+          },
+          {
+            "order_id": "100247",
+            "line_no": 1,
+            "sku": "MUG-0014",
+            "unit_price": 1980,
+            "quantity": 2,
+            "discount_amount": 0,
+            "time": 1759837969
+          },
+          {
+            "order_id": "100247",
+            "line_no": 2,
+            "sku": "TWL-0303",
+            "unit_price": 2020,
+            "quantity": 1,
+            "discount_amount": 0,
+            "time": 1759837969
+          },
+          {
+            "order_id": "100249",
+            "line_no": 1,
+            "sku": "MUG-0016",
+            "unit_price": 1980,
+            "quantity": 2,
+            "discount_amount": 0,
+            "time": 1759836695
+          },
+          {
+            "order_id": "100249",
+            "line_no": 2,
+            "sku": "TWL-0305",
+            "unit_price": 2020,
+            "quantity": 1,
+            "discount_amount": 0,
+            "time": 1759836695
+          },
+          {
+            "order_id": "100251",
+            "line_no": 1,
+            "sku": "MUG-0018",
+            "unit_price": 1980,
+            "quantity": 2,
+            "discount_amount": 0,
+            "time": 1759835421
+          },
+          {
+            "order_id": "100251",
+            "line_no": 2,
+            "sku": "TWL-0307",
+            "unit_price": 2020,
+            "quantity": 1,
+            "discount_amount": 0,
+            "time": 1759835421
+          },
+          {
+            "order_id": "100253",
+            "line_no": 1,
+            "sku": "MUG-0020",
+            "unit_price": 1980,
+            "quantity": 2,
+            "discount_amount": 0,
+            "time": 1759834147
+          },
+          {
+            "order_id": "100253",
+            "line_no": 2,
+            "sku": "TWL-0309",
+            "unit_price": 2020,
+            "quantity": 1,
+            "discount_amount": 0,
+            "time": 1759834147
           }
         ]
       },
@@ -809,6 +1044,62 @@
             "status": "cancelled",
             "ordered_at": "2026-10-07 22:02:17",
             "time": 1759842137
+          },
+          {
+            "order_id": "100248",
+            "customer_id": "C00****1",
+            "order_total": 5980,
+            "status": "fulfilled",
+            "ordered_at": "2026-10-07 21:14:06",
+            "time": 1759837332
+          },
+          {
+            "order_id": "100249",
+            "customer_id": null,
+            "order_total": 2200,
+            "status": "paid",
+            "ordered_at": "2026-10-07 21:20:44",
+            "time": 1759837730
+          },
+          {
+            "order_id": "100250",
+            "customer_id": "C01****8",
+            "order_total": 12800,
+            "status": "cancelled",
+            "ordered_at": "2026-10-07 22:02:20",
+            "time": 1759840226
+          },
+          {
+            "order_id": "100251",
+            "customer_id": "C00****1",
+            "order_total": 5980,
+            "status": "fulfilled",
+            "ordered_at": "2026-10-07 21:14:09",
+            "time": 1759835421
+          },
+          {
+            "order_id": "100252",
+            "customer_id": null,
+            "order_total": 2200,
+            "status": "paid",
+            "ordered_at": "2026-10-07 21:20:47",
+            "time": 1759835819
+          },
+          {
+            "order_id": "100253",
+            "customer_id": "C01****8",
+            "order_total": 12800,
+            "status": "cancelled",
+            "ordered_at": "2026-10-07 22:02:23",
+            "time": 1759838315
+          },
+          {
+            "order_id": "100254",
+            "customer_id": "C00****1",
+            "order_total": 5980,
+            "status": "fulfilled",
+            "ordered_at": "2026-10-07 21:14:12",
+            "time": 1759833510
           }
         ]
       },

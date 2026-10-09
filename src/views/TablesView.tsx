@@ -256,7 +256,13 @@ function TableDetail({ table, catalog, initialTab, highlight }: { table: Catalog
               </table>
             </div>
           </>
-        ) : <Empty>サンプルデータは登録されていません。</Empty>
+        ) : (
+          <Empty>
+            {table.samples
+              ? `サンプルは 0 行です。${table.samples.note ?? 'カタログ作成時に取得されていません。builder SKILL の更新モードで sample-sql → import-samples を実行してください。'}`
+              : 'サンプルデータは登録されていません。'}
+          </Empty>
+        )
       )}
 
       {tab === 'queries' && (
