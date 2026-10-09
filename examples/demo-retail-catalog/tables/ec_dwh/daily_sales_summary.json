@@ -57,5 +57,6 @@
       "engine": "trino",
       "sql": "SELECT sales_date, SUM(sales_amount) AS sales\nFROM ec_dwh.daily_sales_summary\nWHERE sales_date >= format_datetime(current_date - INTERVAL '30' DAY, 'yyyy-MM-dd')\nGROUP BY 1\nORDER BY 1"
     }
-  ]
+  ],
+  "row_count": 2190
 }

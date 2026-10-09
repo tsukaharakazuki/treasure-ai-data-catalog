@@ -80,8 +80,33 @@ export function normalizeLineage(value: Partial<Lineage> | undefined): Lineage {
   return { nodes: asArray(value?.nodes), edges: asArray(value?.edges) }
 }
 
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && /^\s*-?\d+(\.\d+)?\s*$/.test(value)) return Number(value)
+  return undefined
+}
+
+/** Row count and MAX(time) are often written under other keys or as strings; fold them in. */
 export function normalizeTable(value: CatalogTable): CatalogTable {
-  return { ...value, columns: asArray(value.columns) }
+  const raw = value as CatalogTable & Record<string, unknown>
+  const stats = (raw.stats && typeof raw.stats === 'object' ? raw.stats : {}) as Record<string, unknown>
+  const rowCount = [raw.row_count, raw.rowCount, raw.record_count, raw.count, stats.row_count].map(toNumber).find((item) => item !== undefined)
+  let unixtime = [raw.last_updated_unixtime, raw.max_time, raw.last_updated_time, stats.max_time, stats.last_updated_unixtime].map(toNumber).find((item) => item !== undefined)
+  let lastUpdated = typeof raw.last_updated === 'string' ? raw.last_updated : undefined
+  // last_updated written as a UNIX time (number or digit string).
+  if (unixtime === undefined && toNumber(raw.last_updated) !== undefined) {
+    unixtime = toNumber(raw.last_updated)
+    lastUpdated = undefined
+  }
+  // Milliseconds slipped in instead of seconds.
+  if (unixtime !== undefined && unixtime > 1e12) unixtime = Math.floor(unixtime / 1000)
+  return {
+    ...value,
+    columns: asArray(value.columns),
+    ...(rowCount !== undefined ? { row_count: rowCount } : {}),
+    ...(unixtime !== undefined ? { last_updated_unixtime: unixtime } : {}),
+    ...(lastUpdated !== undefined ? { last_updated: lastUpdated } : { last_updated: undefined }),
+  }
 }
 
 export function normalizeBundle(value: Partial<CatalogBundle>): CatalogBundle {

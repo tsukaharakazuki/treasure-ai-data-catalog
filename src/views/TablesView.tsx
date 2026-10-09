@@ -129,8 +129,16 @@ function TableDetail({ table, catalog, initialTab, highlight }: { table: Catalog
         <>
           <div className="facts">
             <div><span>更新頻度</span><strong>{table.update_frequency ?? '-'}</strong></div>
-            <div><span>行数</span><strong>{formatNumber(table.row_count)}</strong></div>
-            <div><span>最終更新（MAX(time)）</span><strong>{formatLastUpdated(table, catalog.catalog.td?.timezone)}</strong></div>
+            <div title={table.row_count === undefined ? 'カタログに行数がありません。builder SKILL の更新モードで SELECT COUNT(*) を取得してください。' : 'SELECT COUNT(*) の結果'}>
+              <span>行数</span>
+              <strong>{table.row_count === undefined ? <span className="muted">未取得</span> : formatNumber(table.row_count)}</strong>
+            </div>
+            <div title={formatLastUpdated(table) === '-' ? (table.columns.some((column) => column.name === 'time') ? 'カタログに MAX(time) がありません。builder SKILL の更新モードで取得してください。' : 'time 列が無いため取得できません。') : `タイムゾーン: ${catalog.catalog.td?.timezone ?? 'Asia/Tokyo'}`}>
+              <span>最終更新（MAX(time)）</span>
+              <strong>{formatLastUpdated(table) === '-'
+                ? <span className="muted">{table.columns.some((column) => column.name === 'time') ? '未取得' : 'time 列なし'}</span>
+                : formatLastUpdated(table, catalog.catalog.td?.timezone)}</strong>
+            </div>
             <div><span>主キー</span><strong>{table.primary_key?.join(', ') ?? '-'}</strong></div>
           </div>
           {(table.tags?.length ?? 0) > 0 && <div className="tags">{table.tags?.map((tag) => <span key={tag} className="tag">{tag}</span>)}</div>}

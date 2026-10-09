@@ -80,7 +80,7 @@ Parent Segment を TD コンソールの URL で指定された場合、URL の�
 各テーブルについて `references/collection-playbook.md` の「スキーマとプロファイル」に従い:
 
 1. スキーマ（information_schema または `tdx describe <db>.<table> --json`）
-2. 行数と最終更新をクエリで取得する: `SELECT COUNT(*), MAX(time)`（`row_count` と `last_updated_unixtime`。`time` 列が無ければ行数のみ）。オーナーは取得しない
+2. 行数と最終更新をクエリで取得する: `SELECT COUNT(*), MAX(time)`（結果は **数値のまま** `row_count` と `last_updated_unixtime` に入れる。キー名を変えない・文字列にしない。`time` 列が無ければ行数のみ）。オーナーは取得しない。validate がこの 2 つの欠けを warning にするので、残さない
 3. ID 候補・コード値候補カラムの軽量プロファイル（桁数・形式・NULL 率・値の種類）
 4. マスク付きサンプル（含める場合のみ、10行。`LIMIT 10`）
 5. 論理名・説明・利用用途を `references/metadata-rules.md` に従って作成
@@ -143,7 +143,7 @@ node $SKILL/scripts/catalog-cli.mjs skill    data-catalog/catalog --out <skills 
 ## 更新モード
 
 1. 前回の ZIP を展開する: `node $SKILL/scripts/catalog-cli.mjs unpack <前回.zip> data-catalog/catalog`
-2. `catalog.json` の `scope` に記録された対象で、手順 4〜8 を再実行する。以前の版で作ったカタログの `privacy.sample_rows_max` が 10 未満なら 10 に上げ、サンプルを 10 行で取り直す。
+2. `catalog.json` の `scope` に記録された対象で、手順 4〜8 を再実行する。以前の版で作ったカタログの `privacy.sample_rows_max` が 10 未満なら 10 に上げ、サンプルを 10 行で取り直す。`row_count` / `last_updated_unixtime` が無いテーブルは必ず取得して埋める。
 3. **人が確定した情報を消さない**:
    - `logical_name_status: confirmed` の論理名・説明・`id_system`・`values` は、カラムの型が変わっていない限り引き継ぐ
    - 用語・処理事例・業務ルール・ID体系はユーザーの指示なく削除しない

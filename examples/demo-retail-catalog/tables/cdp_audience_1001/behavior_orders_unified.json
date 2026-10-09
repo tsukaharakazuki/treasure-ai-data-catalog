@@ -54,5 +54,7 @@
       "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
       "is_partition_key": true
     }
-  ]
+  ],
+  "row_count": 11920455,
+  "last_updated_unixtime": 1791497700
 }

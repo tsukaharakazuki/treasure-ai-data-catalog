@@ -226,6 +226,10 @@ export function lintBundle(bundle) {
     if (!table.columns.length) push('warning', key, 'カラムがありません')
     if (!table.logical_name) push('info', key, 'テーブル論理名が未設定です')
     if (!table.description) push('info', key, '説明が未設定です')
+    if (typeof table.row_count !== 'number') push('warning', key, 'row_count がありません（SELECT COUNT(*) の結果を数値で入れてください）')
+    if (table.columns.some((column) => column.name === 'time') && typeof table.last_updated_unixtime !== 'number') {
+      push('warning', key, 'last_updated_unixtime がありません（MAX(time) の UNIX 秒を数値で入れてください）')
+    }
     for (const column of table.columns) {
       if (!column.name || !column.type) push('error', key, 'カラムには name と type が必要です')
       if (!column.logical_name) push('info', `${key}.${column.name}`, '論理名が未設定です')

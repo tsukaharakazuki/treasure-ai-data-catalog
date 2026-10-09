@@ -104,7 +104,9 @@
           "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
           "is_partition_key": true
         }
-      ]
+      ],
+      "row_count": 11920455,
+      "last_updated_unixtime": 1791497700
     },
     {
       "database": "cdp_audience_1001",
@@ -149,7 +151,9 @@
           "description": "TD のパーティションキー。期間指定は td_interval(time, ...) を使う。",
           "is_partition_key": true
         }
-      ]
+      ],
+      "row_count": 18402233,
+      "last_updated_unixtime": 1791497700
     },
     {
       "database": "cdp_audience_1001",
@@ -200,7 +204,8 @@
           "logical_name": "累計購買金額（LTV）",
           "logical_name_status": "confirmed"
         }
-      ]
+      ],
+      "row_count": 398115
     },
     {
       "database": "ec_dwh",
@@ -261,7 +266,8 @@
           "engine": "trino",
           "sql": "SELECT sales_date, SUM(sales_amount) AS sales\nFROM ec_dwh.daily_sales_summary\nWHERE sales_date >= format_datetime(current_date - INTERVAL '30' DAY, 'yyyy-MM-dd')\nGROUP BY 1\nORDER BY 1"
         }
-      ]
+      ],
+      "row_count": 2190
     },
     {
       "database": "ec_dwh",
@@ -344,7 +350,9 @@
           "engine": "trino",
           "sql": "SELECT age_band, COUNT(*) AS members, AVG(ltv) AS avg_ltv\nFROM ec_dwh.member_master\nGROUP BY 1\nORDER BY 1"
         }
-      ]
+      ],
+      "row_count": 412280,
+      "last_updated_unixtime": 1791495000
     },
     {
       "database": "ec_dwh",
@@ -419,7 +427,9 @@
           "engine": "trino",
           "sql": "SELECT channel,\n       SUM(order_amount) AS sales,\n       COUNT(DISTINCT member_id) AS buyers\nFROM ec_dwh.orders_unified\nWHERE td_interval(time, '0M', 'JST')\nGROUP BY 1"
         }
-      ]
+      ],
+      "row_count": 12704180,
+      "last_updated_unixtime": 1791493200
     },
     {
       "database": "raw_ec",
@@ -949,7 +959,9 @@
           "engine": "trino",
           "sql": "SELECT td_time_string(time, 'd!', 'JST') AS day,\n       approx_distinct(td_client_id) AS uu\nFROM raw_ec.web_pageviews\nWHERE td_interval(time, '-14d', 'JST')\nGROUP BY 1\nORDER BY 1"
         }
-      ]
+      ],
+      "row_count": 25118340,
+      "last_updated_unixtime": 1791499800
     }
   ],
   "lineage": {

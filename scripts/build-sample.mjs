@@ -227,7 +227,16 @@ function tables(revision) {
       timeCol(),
     ],
   }
-  return [shopifyOrders, orderItems, pos, crm, web, unified, master, customers, behaviorOrders, behaviorWeb, ...(revision >= 2 ? [summary] : [])]
+  // COUNT(*) / MAX(time) as the builder would record them (time-less tables get the count only).
+  const measured = {
+    web_pageviews: [25118340, 1791499800], orders_unified: [12704180, 1791493200], member_master: [412280, 1791495000],
+    customers: [398115], behavior_orders_unified: [11920455, 1791497700], behavior_web_pageviews: [18402233, 1791497700], daily_sales_summary: [2190],
+  }
+  const all = [shopifyOrders, orderItems, pos, crm, web, unified, master, customers, behaviorOrders, behaviorWeb, ...(revision >= 2 ? [summary] : [])]
+  return all.map((table) => {
+    const [rowCount, maxTime] = measured[table.name] ?? []
+    return rowCount === undefined ? table : { ...table, row_count: rowCount, ...(maxTime ? { last_updated_unixtime: maxTime } : {}) }
+  })
 }
 
 function lineage(revision) {

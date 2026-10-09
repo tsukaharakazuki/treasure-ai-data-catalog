@@ -79,5 +79,7 @@
       "engine": "trino",
       "sql": "SELECT age_band, COUNT(*) AS members, AVG(ltv) AS avg_ltv\nFROM ec_dwh.member_master\nGROUP BY 1\nORDER BY 1"
     }
-  ]
+  ],
+  "row_count": 412280,
+  "last_updated_unixtime": 1791495000
 }

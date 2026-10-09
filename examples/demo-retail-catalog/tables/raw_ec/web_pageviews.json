@@ -57,5 +57,7 @@
       "engine": "trino",
       "sql": "SELECT td_time_string(time, 'd!', 'JST') AS day,\n       approx_distinct(td_client_id) AS uu\nFROM raw_ec.web_pageviews\nWHERE td_interval(time, '-14d', 'JST')\nGROUP BY 1\nORDER BY 1"
     }
-  ]
+  ],
+  "row_count": 25118340,
+  "last_updated_unixtime": 1791499800
 }

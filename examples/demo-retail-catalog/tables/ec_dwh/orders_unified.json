@@ -71,5 +71,7 @@
       "engine": "trino",
       "sql": "SELECT channel,\n       SUM(order_amount) AS sales,\n       COUNT(DISTINCT member_id) AS buyers\nFROM ec_dwh.orders_unified\nWHERE td_interval(time, '0M', 'JST')\nGROUP BY 1"
     }
-  ]
+  ],
+  "row_count": 12704180,
+  "last_updated_unixtime": 1791493200
 }

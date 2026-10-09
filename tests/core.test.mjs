@@ -197,3 +197,18 @@ test('relationships are inferred from shared ID systems when none are registered
   assert.equal(loaded.relationships[0].from.table, 'raw_ec.shopify_order_items')
   assert.ok(loaded.diagnostics.some((item) => item.message.includes('1 件のリレーションを読み取れません')))
 })
+
+test('row counts and MAX(time) written under other keys or as strings are normalized', () => {
+  const files = sampleFiles()
+  const root = [...files.keys()][0].split('/')[0]
+  const path = `${root}/tables/raw_ec/shopify_orders.json`
+  const table = JSON.parse(files.get(path))
+  delete table.row_count
+  delete table.last_updated_unixtime
+  files.set(path, JSON.stringify({ ...table, rowCount: '1284503', max_time: '1791486600000' }))
+  const loaded = loadCatalogFromFiles(files).tables.find((item) => item.name === 'shopify_orders')
+  assert.equal(loaded.row_count, 1284503)
+  assert.equal(loaded.last_updated_unixtime, 1791486600)
+  files.set(path, JSON.stringify({ ...table, last_updated: 1791486600 }))
+  assert.equal(loadCatalogFromFiles(files).tables.find((item) => item.name === 'shopify_orders').last_updated_unixtime, 1791486600)
+})
