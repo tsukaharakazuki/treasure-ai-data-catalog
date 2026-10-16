@@ -17,6 +17,8 @@ import {
   normalizeRelationship as normalizeCli,
   lintBundle,
   main,
+  privateFolderOf,
+  validateDir,
   normalizeBundle,
   readCatalogDir,
   unzipFiles,
@@ -267,4 +269,63 @@ test('lint flags short or column-poor samples and off-convention lineage ids', (
   assert.ok(messages.some((message) => message.includes('カラムがありません（全カラムを取得')))
   assert.ok(messages.some((message) => message.includes('"src_x" は "source:<id>"')))
   assert.ok(messages.some((message) => message.includes('"out_customers" は "table:<db>.<table>"')))
+})
+
+test('nothing is written inside the private "my" folder', () => {
+  const work = mkdtempSync(join(tmpdir(), 'catalog-my-'))
+  const mine = join(work, 'my', 'data-catalog', 'catalog')
+  assert.ok(privateFolderOf(mine))
+  assert.equal(privateFolderOf(join(work, 'myteam', 'data-catalog')), undefined)
+  assert.throws(() => main(['init', mine, '--name', 'acme']), /my/)
+  assert.ok(!existsSync(join(mine, 'catalog.json')))
+  assert.throws(() => main(['pack', SAMPLE_DIR, '--out', join(work, 'my', 'a.zip')]), /my/)
+  assert.throws(() => main(['unpack', SAMPLE_ZIP, mine]), /my/)
+  assert.throws(() => main(['skill', SAMPLE_DIR, '--out', join(work, 'my', 'skills')]), /my/)
+  assert.throws(() => main(['skill', SAMPLE_DIR, '--out', join(work, 'shared'), '--zip', join(work, 'My', 's.zip')]), /my/)
+  const shared = join(work, 'shared', 'catalog')
+  main(['unpack', SAMPLE_ZIP, shared])
+  const moved = join(work, 'my', 'moved')
+  main(['unpack', SAMPLE_ZIP, join(work, 'shared2', 'catalog')])
+  assert.ok(!validateDir(shared).some((issue) => /my/.test(issue.message)))
+  mkdirSync(moved, { recursive: true })
+  for (const entry of unzipFiles(readFileSync(SAMPLE_ZIP))) {
+    const target = join(moved, entry.path.split('/').slice(1).join('/'))
+    mkdirSync(join(target, '..'), { recursive: true })
+    writeFileSync(target, entry.data)
+  }
+  assert.ok(validateDir(moved).some((issue) => issue.severity === 'error' && /my/.test(issue.message)))
+})
+
+test('MEMORY.md keeps a chronological work log that travels with the ZIP', () => {
+  const work = mkdtempSync(join(tmpdir(), 'catalog-memory-'))
+  const dir = join(work, 'team-a', 'data-catalog', 'catalog')
+  main(['unpack', SAMPLE_ZIP, dir, '--by', '鈴木'])
+  main(['memory', dir, '--by', '鈴木', '--stage', '収集', '--status', '進行中', '--summary', 'raw_ec を再収集', '--open', '会員IDの体系\nPOS の店舗コード', '--next', 'ER の一致率を測る', '--at', '2026-10-16 10:00 (+09:00)'])
+  assert.throws(() => main(['memory', dir, '--by', '鈴木', '--stage', '収集']), /summary/)
+  const zip = join(work, 'team-a', 'data-catalog', 'out.zip')
+  main(['pack', dir, '--out', zip, '--by', '鈴木'])
+  const log = readFileSync(join(work, 'team-a', 'data-catalog', 'MEMORY.md'), 'utf8')
+  const order = ['— 展開 — 担当: 鈴木', '— 収集 — 担当: 鈴木', '— ZIP 作成 — 担当: 鈴木'].map((text) => log.indexOf(text))
+  assert.ok(order.every((index) => index > 0) && order[0] < order[1] && order[1] < order[2], log)
+  assert.match(log, /### 未解決・要確認\n\n- 会員IDの体系\n- POS の店舗コード/)
+  assert.ok(!log.includes(work), 'paths are written relative to the shared folder')
+
+  // The next person unpacks the ZIP somewhere else and gets the log back.
+  const next = join(work, 'team-b', 'data-catalog', 'catalog')
+  main(['unpack', zip, next, '--by', '佐藤'])
+  const restored = readFileSync(join(work, 'team-b', 'data-catalog', 'MEMORY.md'), 'utf8')
+  assert.ok(restored.includes('— ZIP 作成 — 担当: 鈴木'))
+  assert.ok(restored.trimEnd().endsWith('（20 ファイル）'))
+  assert.ok(!existsSync(join(next, 'MEMORY.md')), 'the log stays outside the catalog directory')
+  const skills = join(work, 'team-b', 'data-catalog', 'skills')
+  main(['skill', next, '--out', skills])
+  assert.ok(!existsSync(join(skills, 'minato-data-catalog', 'references/catalog/MEMORY.md')))
+
+  // The viewer ignores the log inside the ZIP.
+  const files = new Map(unzipFiles(readFileSync(zip)).map((entry) => [entry.path, entry.data.toString('utf8')]))
+  assert.ok([...files.keys()].some((path) => path.endsWith('/MEMORY.md')))
+  assert.equal(loadCatalogFromFiles(files).diagnostics.filter((item) => item.severity === 'error').length, 0)
+
+  // A secret is never written to the log.
+  assert.throws(() => main(['memory', next, '--by', '佐藤', '--stage', '確認', '--summary', 'key: 1234/abcdefabcdefabcdefabcdefabcdefabcdefabcd']), /MEMORY/)
 })

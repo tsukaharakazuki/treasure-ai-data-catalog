@@ -19,6 +19,8 @@ catalog/
 ```
 
 - ZIP は `catalog/` フォルダごと固めてよい（ビューアーは `catalog.json` のある階層をルートとして扱う）。
+- カタログは Treasure AI Studio の `my` フォルダ（本人しかアクセスできない）に置かない。`my` 以外の共有フォルダ `<共有フォルダ>/data-catalog/catalog/` に置く。CLI は `my` の中への書き出しを拒否し、validate も error にする。
+- 作業記録 `MEMORY.md` は catalog の 1 つ上（`<共有フォルダ>/data-catalog/MEMORY.md`）に置く。`pack` が ZIP のルート（`catalog.json` と同じ階層）に同梱し、`unpack` が元の位置に復元する。ビューアーと生成 SKILL は読まない。
 - `revisions/` と `CHANGELOG.md` は手で書かない。`catalog-cli.mjs release` が作る。
 - 不明な値は **キーごと省略** する。空文字や「不明」で埋めない。
 

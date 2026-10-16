@@ -14,8 +14,11 @@ Treasure AI Studio
        ├─ tdx（読み取り専用）で Parent Segment / Workflow / Saved Query / Source / テーブルを収集
        ├─ catalog-cli.mjs で validate → release（リビジョン採番・差分）→ pack
        ├─ <name>-data-catalog-r000N.zip ………… ビューアーで開く
-       └─ <name>-data-catalog SKILL ………………… 誰でも Studio で使える
+       ├─ <name>-data-catalog SKILL ………………… 誰でも Studio で使える
+       └─ MEMORY.md ………………………………………… 作業記録（時系列・担当者の引き継ぎ用）
 ```
+
+生成物はすべて **`my` 以外の共有フォルダ**（既定は `data-catalog/`）に置きます。Treasure AI Studio の `my` フォルダは本人しかアクセスできず、他のメンバーに共有できないためです。CLI も `my` の中への書き出しをエラーにします。作業は段階を追って担当者をまたいで進むので、各段階の内容・確定事項・要確認事項・次にやることを `MEMORY.md` に時系列で残し、ZIP にも同梱します。
 
 ## カタログに含まれるもの
 
@@ -47,19 +50,22 @@ ZIP はブラウザ内でだけ読み込みます。サーバーはなく、TD �
 `skills/treasure-ai-data-catalog-builder/scripts/catalog-cli.mjs`（Node.js 18 以上、依存なし。TD には接続しません）。
 
 ```sh
-node scripts/catalog-cli.mjs init     data-catalog/catalog --name acme --lang ja
+node scripts/catalog-cli.mjs init     data-catalog/catalog --name acme --lang ja --by 山田   # data-catalog/MEMORY.md も作成
 node scripts/catalog-cli.mjs validate data-catalog/catalog
 node scripts/catalog-cli.mjs release  data-catalog/catalog --note "初版"
 node scripts/catalog-cli.mjs diff     data-catalog/catalog --from r0001 --to current
-node scripts/catalog-cli.mjs pack     data-catalog/catalog --out acme-data-catalog-r0001.zip
-node scripts/catalog-cli.mjs unpack   acme-data-catalog-r0001.zip data-catalog/catalog
+node scripts/catalog-cli.mjs pack     data-catalog/catalog --out data-catalog/acme-data-catalog-r0001.zip   # MEMORY.md を同梱
+node scripts/catalog-cli.mjs unpack   acme-data-catalog-r0001.zip data-catalog/catalog                     # MEMORY.md を復元
 node scripts/catalog-cli.mjs sample-sql data-catalog/catalog      # 全カラムのマスク付きサンプル取得 SQL（10 行）
 node scripts/catalog-cli.mjs import-samples data-catalog/catalog --table db.t --file result.json
 node scripts/catalog-cli.mjs relationships data-catalog/catalog   # ID体系から ER 候補と一致率 SQL
-node scripts/catalog-cli.mjs skill    data-catalog/catalog --out ~/.treasure-work/.claude/skills --zip acme-data-catalog-skill.zip
+node scripts/catalog-cli.mjs skill    data-catalog/catalog --out data-catalog/skills --zip data-catalog/acme-data-catalog-skill.zip
+node scripts/catalog-cli.mjs memory   data-catalog/catalog --by 山田 --stage 収集 --status 進行中 --summary "raw_ec を収集" --open "会員IDの体系（EC担当に確認）" --next "ER の一致率を測る"
 ```
 
-`validate` は、形式・相互参照（未定義のID体系やテーブル）・サンプル行数・個人情報のマスク漏れ・API キーや Webhook らしき文字列を検査します。
+`data-catalog/` は `my` 以外の場所に置きます（パスに `my` フォルダが含まれるとエラー）。`init` / `release` / `pack` / `unpack` / `skill` は `MEMORY.md` に自動で 1 行追記し、`memory` で段階ごとの記録を追記します。
+
+`validate` は、カタログの置き場所（`my` の中でないこと）、形式・相互参照（未定義のID体系やテーブル）・サンプル行数・個人情報のマスク漏れ・API キーや Webhook らしき文字列を検査します。
 
 ## サンプル
 
