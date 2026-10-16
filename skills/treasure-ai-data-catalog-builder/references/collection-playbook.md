@@ -100,7 +100,7 @@ Parent Segment が起点に指定されたら、**Parent Segment 用に作られ
 tdx wf projects --json
 tdx wf workflows <project> --json
 tdx wf schedules --json                      # スケジュール
-tdx wf pull <project> data-catalog/_work/wf/<project>   # ローカルに取得（push しない）
+tdx wf pull <project> $WORK/_work/wf/<project>   # ローカルに取得（push しない）
 ```
 
 取得したファイルを読み、各 `.dig` について次を抽出する。
@@ -247,9 +247,9 @@ FROM a LEFT JOIN b ON a.v = b.v
 **SQL は CLI で生成する**（`references/metadata-rules.md` の「サンプルのマスク」を全カラムに機械的に適用する）。
 
 ```bash
-node $SKILL/scripts/catalog-cli.mjs sample-sql data-catalog/catalog [--table <db>.<table>] [--range -30d|-365d|all]
-tdx query -f data-catalog/_work/samples/<db>.<table>.sql --json --output data-catalog/_work/samples/<db>.<table>.json
-node $SKILL/scripts/catalog-cli.mjs import-samples data-catalog/catalog --table <db>.<table> --file data-catalog/_work/samples/<db>.<table>.json
+node $SKILL/scripts/catalog-cli.mjs sample-sql $WORK/catalog [--table <db>.<table>] [--range -30d|-365d|all]
+tdx query -f $WORK/_work/samples/<db>.<table>.sql --json --output $WORK/_work/samples/<db>.<table>.json
+node $SKILL/scripts/catalog-cli.mjs import-samples $WORK/catalog --table <db>.<table> --file $WORK/_work/samples/<db>.<table>.json
 ```
 
 - 生成される SQL: 全カラムを列挙し、`pii` とカラム名（email / phone / name / address / birth / notes など）から判定したマスク式を付け、`WHERE td_interval(time, '<range>') ORDER BY time DESC LIMIT 10`（`time` 列が無いテーブルは条件なし）
@@ -265,5 +265,6 @@ node $SKILL/scripts/catalog-cli.mjs import-samples data-catalog/catalog --table 
 
 - テーブル: `tables/<db>/<table>.json`
 - リネージ・ER・用語・アセット: ルートの各 JSON
-- 書き終えたら `node $SKILL/scripts/catalog-cli.mjs validate data-catalog/catalog`
-- `data-catalog/_work/`（pull した Workflow など）はカタログ ZIP に含めない（catalog ディレクトリの外に置く）
+- 書き終えたら `node $SKILL/scripts/catalog-cli.mjs validate $WORK/catalog`
+- `$WORK/_work/`（pull した Workflow など）はカタログ ZIP に含めない（catalog ディレクトリの外に置く）
+- `$WORK` は Treasure AI Studio の `my` 以外の共有フォルダ。`tdx wf pull` / `tdx ps pull` / `tdx query --output` の出力先も `my` にしない

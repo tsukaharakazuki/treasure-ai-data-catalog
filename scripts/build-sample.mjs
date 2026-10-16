@@ -406,7 +406,7 @@ function updateManifest(patch) {
   write('catalog.json', { ...JSON.parse(readFileSync(path, 'utf8')), ...patch })
 }
 
-main(['init', OUT, '--name', 'minato', '--display-name', 'ミナト雑貨 データカタログ（サンプル）', '--customer', 'ミナト雑貨株式会社（架空）', '--service', 'ミナト雑貨 EC・店舗', '--lang', 'ja', '--site', 'us01'])
+main(['init', OUT, '--name', 'minato', '--display-name', 'ミナト雑貨 データカタログ（サンプル）', '--customer', 'ミナト雑貨株式会社（架空）', '--service', 'ミナト雑貨 EC・店舗', '--lang', 'ja', '--site', 'us01', '--no-memory'])
 const scope = { databases: ['raw_ec', 'ec_dwh', 'cdp_audience_1001'], parent_segments: ['ミナト会員'], workflow_projects: ['ec_daily'], saved_queries: [], sources: ['shopify_daily_import', 'pos_s3_import', 'sfdc_members'], inputs: [] }
 updateManifest({
   td: { site: 'us01', console_base_url: CONSOLE, timezone: 'Asia/Tokyo' },

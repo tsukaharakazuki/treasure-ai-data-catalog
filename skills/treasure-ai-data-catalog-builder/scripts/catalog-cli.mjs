@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 // Treasure AI Data Catalog CLI — zero dependencies, Node.js 18+.
 //
-//   node catalog-cli.mjs init <dir> --name acme [--display-name "..."] [--customer "..."] [--service "..."] [--lang ja] [--site us01]
+//   node catalog-cli.mjs init <dir> --name acme [--display-name "..."] [--customer "..."] [--service "..."] [--lang ja] [--site us01] [--by "担当者"] [--no-memory]
 //   node catalog-cli.mjs validate <dir>
 //   node catalog-cli.mjs release <dir> --note "初版" [--by "Treasure AI Studio"] [--at <ISO8601>] [--allow-empty]
 //   node catalog-cli.mjs diff <dir> [--from r0001] [--to r0002|current]
 //   node catalog-cli.mjs pack <dir> --out <file.zip> [--force]
-//   node catalog-cli.mjs unpack <file.zip> <dir>
+//   node catalog-cli.mjs unpack <file.zip> <dir> [--by "担当者"]
 //   node catalog-cli.mjs relationships <dir> [--write]   # ID体系から ER 候補と一致率検証 SQL を出す
 //   node catalog-cli.mjs sample-sql <dir> [--table db.t] [--range -30d|all] [--out <dir>]   # マスク付きサンプル取得 SQL
 //   node catalog-cli.mjs import-samples <dir> --table db.t --file <tdx query --json の出力> [--note "..."]
 //   node catalog-cli.mjs skill <dir> --out <skills-root-or-skill-dir> [--zip <skill.zip>] [--template <SKILL.md.tmpl>]
+//   node catalog-cli.mjs memory <dir> --by "担当者" --stage "収集" --summary "..." [--done "..."] [--decided "..."] [--open "..."] [--next "..."] [--status 進行中|完了|中断]
 //
+// <dir> はカタログのディレクトリ（例: <共有フォルダ>/data-catalog/catalog）。作業記録は 1 つ上の MEMORY.md に時系列で追記する。
+// Treasure AI Studio の「my」フォルダは本人しか見られないため、my の中には何も書き出さない（エラーにする）。
 // This tool only touches local files. It never calls Treasure Data or tdx.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, copyFileSync } from 'node:fs'
@@ -378,7 +381,9 @@ function scanSecrets(dir) {
 }
 
 export function validateDir(dir) {
-  return [...lintBundle(readCatalogDir(dir)), ...scanSecrets(dir)]
+  const folder = privateFolderOf(dir)
+  const location = folder ? [{ severity: 'error', path: '.', message: `カタログが「my」フォルダ（${folder}）の中にあります。my は他のメンバーと共有できないため、my 以外のフォルダへ移してください` }] : []
+  return [...location, ...lintBundle(readCatalogDir(dir)), ...scanSecrets(dir)]
 }
 
 function printIssues(issues) {
@@ -652,6 +657,85 @@ export function indexMarkdown(bundle) {
   return `${lines.join('\n')}\n`
 }
 
+
+// ---------------------------------------------------------------------------
+// Shared folders and MEMORY.md
+//
+// Treasure AI Studio gives every user a private "my" folder that nobody else can open.
+// Catalogs, ZIPs, generated skills and the work log are shared deliverables, so they
+// must never be written there.
+
+export const PRIVATE_FOLDER = /^my$/i
+
+export function privateFolderOf(path) {
+  const parts = resolve(path).split(sep)
+  const index = parts.findIndex((part) => PRIVATE_FOLDER.test(part))
+  return index < 0 ? undefined : parts.slice(0, index + 1).join(sep) || sep
+}
+
+export function assertSharedPath(path, label = '出力先') {
+  const folder = privateFolderOf(path)
+  if (folder) {
+    throw new Error(`${label}（${resolve(path)}）は「my」フォルダ（${folder}）の中です。my は本人しか開けず他のメンバーと共有できないため、my 以外のフォルダ（例: ${join(dirname(folder), 'data-catalog')}）を作成し、その中で作業してください`)
+  }
+}
+
+export const MEMORY_FILE = 'MEMORY.md'
+export const memoryPath = (dir) => join(dirname(resolve(dir)), MEMORY_FILE)
+// Paths in the log are relative to the shared folder so they still make sense for the next person.
+const fromWork = (dir, path) => relative(dirname(resolve(dir)), resolve(path)).split(sep).join('/') || '.'
+
+const MEMORY_HEADER = `# MEMORY — データカタログ作業記録
+
+データカタログの作業は段階を分けて、担当者をまたいで進めます。このファイルには **時系列（古い順）** で作業を追記します。
+作業を始める人は **最後のエントリ** から「現在の状態」「未解決・要確認」「次にやること」を読んで引き継いでください。
+
+- 追記は \`node catalog-cli.mjs memory <catalog-dir> --by <担当者> --stage <段階> --summary <要約> ...\` で行う（init / release / pack / unpack / skill は自動で 1 行追記する）
+- 過去のエントリは書き換えない。訂正は新しいエントリで行う
+- API キー・トークン・個人情報の生値は書かない
+- このフォルダは「my」以外の共有フォルダに置く（my は本人しか開けない）
+
+`
+
+function stamp(at) {
+  if (typeof at === 'string') return at
+  const date = new Date()
+  const offset = -date.getTimezoneOffset()
+  const pad = (value) => String(Math.trunc(Math.abs(value))).padStart(2, '0')
+  const local = new Date(date.getTime() + offset * 60000).toISOString()
+  return `${local.slice(0, 10)} ${local.slice(11, 16)} (${offset >= 0 ? '+' : '-'}${pad(offset / 60)}:${pad(offset % 60)})`
+}
+
+const bullets = (value) => (typeof value === 'string' ? value.split(/\r?\n/).map((line) => line.replace(/^\s*[-*・]\s*/, '').trim()).filter(Boolean) : [])
+
+export function memoryEntry({ at, by, stage, status, summary, done, decided, open, next }) {
+  const lines = [`## ${stamp(at)} — ${stage || '作業'} — 担当: ${by || '（未記入）'}`, '']
+  if (status) lines.push(`- 状態: ${status}`)
+  for (const line of bullets(summary)) lines.push(`- ${line}`)
+  for (const [title, value] of [['実施したこと', done], ['決定・確認済み', decided], ['未解決・要確認', open], ['次にやること', next]]) {
+    const items = bullets(value)
+    if (items.length) lines.push('', `### ${title}`, '', ...items.map((item) => `- ${item}`))
+  }
+  return `${lines.join('\n')}\n\n`
+}
+
+export function appendMemory(dir, entry, { create = false } = {}) {
+  const path = memoryPath(dir)
+  if (!existsSync(path)) {
+    if (!create) return undefined
+    assertSharedPath(path, 'MEMORY.md')
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, MEMORY_HEADER)
+  }
+  assertSharedPath(path, 'MEMORY.md')
+  const text = readFileSync(path, 'utf8')
+  for (const [pattern, label] of SECRET_PATTERNS) {
+    if (pattern.test(JSON.stringify(entry))) throw new Error(`MEMORY.md に書こうとした内容に${label}が含まれている可能性があります。書き込みを中止しました`)
+  }
+  writeFileSync(path, `${text.replace(/\n*$/, '\n\n')}${memoryEntry(entry)}`.replace(/\n{3,}/g, '\n\n'))
+  return path
+}
+
 // ---------------------------------------------------------------------------
 // Commands
 
@@ -676,6 +760,7 @@ const revisionId = (number) => `r${String(number).padStart(4, '0')}`
 function cmdInit(dir, flags) {
   if (!flags.name) throw new Error('--name が必要です（例: --name acme）')
   if (existsSync(join(dir, 'catalog.json'))) throw new Error(`${dir} には既にカタログがあります`)
+  assertSharedPath(dir, 'カタログの作業ディレクトリ')
   const site = flags.site ?? 'us01'
   writeJson(join(dir, 'catalog.json'), {
     format: FORMAT,
@@ -697,6 +782,10 @@ function cmdInit(dir, flags) {
   writeJson(join(dir, 'revisions/index.json'), { revisions: [] })
   mkdirSync(join(dir, 'tables'), { recursive: true })
   console.log(`カタログを初期化しました: ${dir}`)
+  if (!flags['no-memory']) {
+    const memory = appendMemory(dir, { by: flags.by, stage: '初期化', status: '進行中', summary: `カタログ「${flags.name}」を ${fromWork(dir, dir)}/ に初期化（site: ${site}）` }, { create: true })
+    console.log(`作業記録: ${memory}`)
+  }
 }
 
 function cmdValidate(dir) {
@@ -731,6 +820,8 @@ function cmdRelease(dir, flags) {
   const entry = `## ${revision.id} — ${revision.generated_at.slice(0, 10)}${revision.note ? ` ${revision.note}` : ''}\n\n比較元: ${last?.id ?? '（初版）'}\n\n${diffMarkdown(diff)}\n\n`
   writeFileSync(changelogPath, `# 変更履歴\n\n${entry}${existing}`)
   console.log(`${revision.id} をリリースしました`)
+  const changed = Object.entries(diff.summary).filter(([, value]) => value).map(([key, value]) => `${key} ${value}`).join(', ')
+  appendMemory(dir, { by: flags.by, stage: 'リリース', summary: `${revision.id} をリリース${revision.note ? `（${revision.note}）` : ''}。比較元: ${last?.id ?? '初版'}${changed ? `／変更: ${changed}` : ''}` })
   console.log(diffMarkdown(diff))
 }
 
@@ -752,6 +843,7 @@ function cmdDiff(dir, flags) {
 
 function cmdPack(dir, flags) {
   if (!flags.out) throw new Error('--out が必要です')
+  assertSharedPath(flags.out, 'ZIP の出力先')
   const issues = validateDir(dir)
   if (issues.some((issue) => issue.severity === 'error') && !flags.force) {
     printIssues(issues)
@@ -760,27 +852,50 @@ function cmdPack(dir, flags) {
   const folder = basename(resolve(dir))
   const files = walk(dir).filter((path) => !PACK_EXCLUDE.some((pattern) => pattern.test(path)))
   const skipped = walk(dir).length - files.length
-  const zip = zipFiles(files.map((path) => ({ path: `${folder}/${path}`, data: readFileSync(join(dir, path)) })))
+  appendMemory(dir, { by: flags.by, stage: 'ZIP 作成', summary: `${fromWork(dir, flags.out)} を作成（${readCatalogDir(dir).catalog.revision?.id ?? 'draft'}）` })
+  const entries = files.map((path) => ({ path: `${folder}/${path}`, data: readFileSync(join(dir, path)) }))
+  // The work log travels with the ZIP so the next person can pick up where the last one stopped.
+  const memory = memoryPath(dir)
+  if (existsSync(memory) && !files.includes(MEMORY_FILE)) entries.push({ path: `${folder}/${MEMORY_FILE}`, data: readFileSync(memory) })
+  const zip = zipFiles(entries)
   mkdirSync(dirname(resolve(flags.out)), { recursive: true })
   writeFileSync(flags.out, zip)
-  console.log(`${flags.out} を作成しました（${files.length} ファイル、${zip.length.toLocaleString()} bytes${skipped ? `、除外 ${skipped} ファイル` : ''}）`)
+  console.log(`${flags.out} を作成しました（${entries.length} ファイル、${zip.length.toLocaleString()} bytes${skipped ? `、除外 ${skipped} ファイル` : ''}）`)
 }
 
-function cmdUnpack(file, dir) {
+function cmdUnpack(file, dir, flags = {}) {
   if (!file || !dir) throw new Error('unpack <file.zip> <dir>')
+  assertSharedPath(dir, '展開先')
   const entries = unzipFiles(readFileSync(file))
   const manifest = entries.map((entry) => entry.path).filter((path) => path === 'catalog.json' || path.endsWith('/catalog.json')).sort((a, b) => a.length - b.length)[0]
   if (!manifest) throw new Error('catalog.json が ZIP にありません')
   const root = manifest.slice(0, -'catalog.json'.length)
   let written = 0
+  let memoryNote
   for (const entry of entries) {
     if (!entry.path.startsWith(root)) continue
+    if (entry.path.slice(root.length) === MEMORY_FILE) {
+      const target = memoryPath(dir)
+      if (existsSync(target)) {
+        if (readFileSync(target, 'utf8') !== entry.data.toString('utf8')) {
+          writeFileSync(join(dirname(target), 'MEMORY.from-zip.md'), entry.data)
+          memoryNote = `既存の ${target} は残し、ZIP 内の作業記録を MEMORY.from-zip.md に書き出しました。内容を確認して MEMORY.md に統合してください`
+        }
+      } else {
+        mkdirSync(dirname(target), { recursive: true })
+        writeFileSync(target, entry.data)
+        memoryNote = `ZIP 内の作業記録を ${target} に復元しました。最後のエントリから引き継いでください`
+      }
+      continue
+    }
     const target = join(dir, entry.path.slice(root.length))
     mkdirSync(dirname(target), { recursive: true })
     writeFileSync(target, entry.data)
     written += 1
   }
   console.log(`${dir} に ${written} ファイルを展開しました`)
+  if (memoryNote) console.log(memoryNote)
+  appendMemory(dir, { by: flags.by, stage: '展開', summary: `${basename(file)} を ${fromWork(dir, dir)}/ に展開（${written} ファイル）` }, { create: true })
 }
 
 function copyTree(source, target, filter) {
@@ -802,6 +917,7 @@ function cmdSampleSql(dir, flags) {
   const limit = bundle.catalog.privacy?.sample_rows_max ?? 10
   const tables = typeof flags.table === 'string' ? [findTable(bundle, flags.table)] : bundle.tables
   const out = typeof flags.out === 'string' ? flags.out : join(dirname(resolve(dir)), '_work/samples')
+  assertSharedPath(out, 'SQL の出力先')
   mkdirSync(out, { recursive: true })
   for (const table of tables) {
     const path = join(out, `${tableKey(table)}.sql`)
@@ -829,6 +945,7 @@ function parseRows(text) {
 
 function cmdImportSamples(dir, flags) {
   if (typeof flags.table !== 'string' || typeof flags.file !== 'string') throw new Error('--table <db.table> と --file <result.json> が必要です')
+  assertSharedPath(dir, 'カタログの作業ディレクトリ')
   const bundle = readCatalogDir(dir)
   const table = findTable(bundle, flags.table)
   const limit = bundle.catalog.privacy?.sample_rows_max ?? 10
@@ -861,6 +978,7 @@ function cmdRelationships(dir, flags) {
     console.log(`${matchRateSql(relation, bundle)};\n`)
   })
   if (flags.write && candidates.length) {
+    assertSharedPath(dir, 'カタログの作業ディレクトリ')
     // Rewrite in the canonical shape, keeping existing entries first.
     writeJson(join(dir, 'relationships.json'), { relationships: [...bundle.relationships, ...candidates] })
     console.log(`relationships.json に ${candidates.length} 件を confidence: inferred で追加しました。一致率を確認したら evidence と confidence を更新してください。`)
@@ -873,6 +991,8 @@ function cmdSkill(dir, flags) {
   const c = bundle.catalog
   const skillName = `${c.name}-data-catalog`
   const out = basename(resolve(flags.out)) === skillName ? resolve(flags.out) : join(resolve(flags.out), skillName)
+  assertSharedPath(out, 'SKILL の出力先')
+  if (typeof flags.zip === 'string') assertSharedPath(flags.zip, '配布用 ZIP の出力先')
   const template = readFileSync(typeof flags.template === 'string' ? flags.template : DEFAULT_TEMPLATE, 'utf8')
   const databases = [...new Set(bundle.tables.map((table) => table.database))]
   const values = {
@@ -902,6 +1022,14 @@ function cmdSkill(dir, flags) {
     writeFileSync(flags.zip, zip)
     console.log(`配布用 ZIP を作成しました: ${flags.zip}`)
   }
+  appendMemory(dir, { by: flags.by, stage: 'SKILL 生成', summary: `${skillName}（${values.revision}）を ${fromWork(dir, out)}/ に生成${typeof flags.zip === 'string' ? `、配布用 ZIP: ${fromWork(dir, flags.zip)}` : ''}` })
+}
+
+function cmdMemory(dir, flags) {
+  if (!dir) throw new Error('memory <catalog-dir> --by <担当者> --stage <段階> --summary <要約>')
+  if (!flags.by || !flags.stage || !flags.summary) throw new Error('--by（担当者）・--stage（段階）・--summary（要約）が必要です')
+  const path = appendMemory(dir, { at: flags.at, by: flags.by, stage: flags.stage, status: flags.status, summary: flags.summary, done: flags.done, decided: flags.decided, open: flags.open, next: flags.next }, { create: true })
+  console.log(`${path} に追記しました`)
 }
 
 export function main(argv) {
@@ -913,13 +1041,14 @@ export function main(argv) {
     case 'release': return cmdRelease(positional[0], flags)
     case 'diff': return cmdDiff(positional[0], flags)
     case 'pack': return cmdPack(positional[0], flags)
-    case 'unpack': return cmdUnpack(positional[0], positional[1])
+    case 'unpack': return cmdUnpack(positional[0], positional[1], flags)
     case 'relationships': return cmdRelationships(positional[0], flags)
     case 'sample-sql': return cmdSampleSql(positional[0], flags)
     case 'import-samples': return cmdImportSamples(positional[0], flags)
     case 'skill': return cmdSkill(positional[0], flags)
+    case 'memory': return cmdMemory(positional[0], flags)
     default:
-      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split("\n").slice(1, 15).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
+      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split("\n").slice(1, 19).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
       if (command && command !== 'help') process.exitCode = 1
   }
 }

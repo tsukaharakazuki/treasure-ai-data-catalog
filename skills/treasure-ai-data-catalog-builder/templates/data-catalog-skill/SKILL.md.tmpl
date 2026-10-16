@@ -43,6 +43,7 @@ description: "{{customer}}（{{service}}）の Treasure Data データカタロ�
 
 - ユーザーが実行を求めたときだけ、`tdx query` で **読み取り専用の SELECT** を実行する。`INSERT` / `CREATE` / `DELETE` / `tdx wf run` などの書き込み・実行系は行わない。
 - 結果の確認は `LIMIT` を付け、個人情報（`pii` が `personal` / `sensitive` のカラム）は集計値で返し、個票を出力しない。
+- SQL・結果・レポートなどをファイルに保存するときは、Treasure AI Studio の `my` フォルダ（本人しかアクセスできず、他のメンバーに共有できない）には置かない。`my` 以外のフォルダを作成し、その中に保存する。
 
 ## カタログの限界と更新
 
