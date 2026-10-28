@@ -69,7 +69,7 @@ Parent Segment が起点に指定されたら、**Parent Segment 用に作られ
    ログ中の SQL の `FROM` / `JOIN` から、`cdp_audience_<id>` 以外の DB のテーブルを元データとして拾う。
    - `attempt ... kill` / `retry`、`wf retry`、`ps run` は実行しない。
    - ログの全文はカタログに保存しない（必要なテーブル名・結合条件だけ取り出す）。ログに値が出ていても転記しない。
-4. 元テーブルを対象テーブルに加え、スキーマ・論理名・サンプルなどを他のテーブルと同じ手順で作る。さらにその元テーブルの上流（Source・Workflow）へ 1 ホップ広げる。
+4. 元テーブルを対象テーブルに加え、スキーマ・論理名・集計統計などを他のテーブルと同じ手順で作る。さらにその元テーブルの上流（Source・Workflow）へ 1 ホップ広げる。
 5. リネージは「元テーブル → `customers` / `behavior_*` → `parent_segment:<id>`」（下記「出力テーブル」）。元テーブルから Parent Segment へ直接は張らない。根拠を `note` に書く（例: `ps pull の behaviors.orders` / `cdp_audience_1389723 attempt 123456 のログ`）。構成ファイルとログの両方で確認できたものは `exact`、片方だけなら `exact`（構成ファイル）または `inferred`（ログからの推定）。
 6. 構成ファイルとログで元テーブルが食い違う場合（構成変更後に未実行など）は、両方をユーザーに示して、どちらを正とするか確認する。
 
@@ -184,41 +184,25 @@ FROM <db>.<table>
 - 更新モードでも毎回取り直す（行数・最終更新はリビジョン差分の対象外）。
 - オーナーは取得・記載しない。
 
-### ID・コード値候補の軽量プロファイル
+### ID候補の軽量プロファイル（集計値のみ）
 
-対象は、名前が `*id` / `*_no` / `*_code` / `*_key` / `*_cd` / `*_type` / `*_flag` / `*_status` のカラムと、`approx_distinct` が小さい varchar / int カラム。**`pii` が `personal` / `sensitive` のカラムは値を取らない。**
-
-```sql
--- 形式の分布（値そのものは返さない。数字→9、英字→A に置換した「形」だけ）
-SELECT
-  length(CAST(c AS varchar)) AS len,
-  regexp_replace(regexp_replace(CAST(c AS varchar), '[0-9]', '9'), '[A-Za-z]', 'A') AS shape,
-  COUNT(*) AS rows
-FROM <db>.<table>
-WHERE td_interval(time, '-30d')
-GROUP BY 1, 2
-ORDER BY 3 DESC
-LIMIT 5
-```
+実データの行・値は、マスク済み・ハッシュ化済みでも取得しない。以下は固定数の集計値だけを返す。氏名や自由記述から形式を推測する必要はない。ID候補であっても、値そのもの、先頭文字、DISTINCT値の一覧は返さない。
 
 ```sql
--- NULL 率と種類数
-SELECT COUNT(*) AS rows, COUNT(c) AS non_null, approx_distinct(c) AS distinct_approx
+SELECT COUNT(*) AS rows,
+       COUNT(c) AS non_null,
+       approx_distinct(c) AS distinct_approx,
+       MIN(length(CAST(c AS varchar))) AS min_length,
+       MAX(length(CAST(c AS varchar))) AS max_length,
+       COUNT_IF(regexp_like(CAST(c AS varchar), '^[0-9]+$')) AS numeric_format_count,
+       COUNT_IF(regexp_like(CAST(c AS varchar), '^[A-Za-z0-9]+$')) AS alphanumeric_format_count
 FROM <db>.<table>
 WHERE td_interval(time, '-30d')
 ```
 
-```sql
--- コード値（種類数が 30 以下のカラムだけ）
-SELECT c, COUNT(*) AS rows
-FROM <db>.<table>
-WHERE td_interval(time, '-30d')
-GROUP BY 1
-ORDER BY 2 DESC
-LIMIT 30
-```
-
-`time` 列が無いテーブル（マスター等）は `td_interval` を外し、`TABLESAMPLE BERNOULLI (1)` などで軽くする。重そうなら件数を確認してから実行する。
+- `time` 列がなければ期間条件は外す。重い集計やフルスキャンは先に対象と負荷を確認する。
+- 文字を置換した shape、部分伏字、ハッシュも実値の派生なので取得しない。コード定義とIDの正式な形式は、仕様書・SQL定義・ユーザーの説明から確認する。
+- `values` には確認済みのコード定義だけを書く。`SELECT c, COUNT(*) GROUP BY c` で観測値を持ち出して埋めない。
 
 ### 結合の裏付け（一致率）
 
@@ -232,34 +216,24 @@ WITH a AS (
 b AS (
   SELECT DISTINCT CAST(<col_b> AS varchar) AS v
   FROM <db_b>.<table_b>
-  WHERE <col_b> IS NOT NULL
+  WHERE td_interval(time, '-30d') AND <col_b> IS NOT NULL
 )
 SELECT COUNT(*) AS sampled, COUNT(b.v) AS matched,
-       ROUND(100.0 * COUNT(b.v) / COUNT(*), 1) AS match_pct
+       ROUND(100.0 * COUNT(b.v) / NULLIF(COUNT(*), 0), 1) AS match_pct
 FROM a LEFT JOIN b ON a.v = b.v
 ```
 
+- CTE のキーは TD 内部でだけ使い、最終 SELECT は件数・一致率だけにする。キーの中間結果を取得・保存しない。time 列がない側だけ期間条件を外す。
 - 一致率 90% 以上 → `confirmed` 候補（JOIN 定義があれば確定）。50〜90% → `inferred`。それ未満 → 別体系の可能性。ID体系の問い合わせに使う。
 - 片側が一意か（`COUNT(*)` と `approx_distinct` がほぼ同じ）でカーディナリティを決める。
 
-### マスク付きサンプル
+### 行サンプルは禁止
 
-**SQL は CLI で生成する**（`references/metadata-rules.md` の「サンプルのマスク」を全カラムに機械的に適用する）。
+生値・マスク・ハッシュ化を問わず、行サンプルを取得・取り込み・保存しない。旧版の行取得コマンドは廃止されている。現在のテーブルと過去のリビジョンから `samples` / `example_masked` を除き、`privacy.sample_rows_max` は 0 にする。旧ZIPの保持者にメタデータ専用版の用意を依頼する。
 
-```bash
-node $SKILL/scripts/catalog-cli.mjs sample-sql $WORK/catalog [--table <db>.<table>] [--range -30d|-365d|all]
-tdx query -f $WORK/_work/samples/<db>.<table>.sql --json --output $WORK/_work/samples/<db>.<table>.json
-node $SKILL/scripts/catalog-cli.mjs import-samples $WORK/catalog --table <db>.<table> --file $WORK/_work/samples/<db>.<table>.json
-```
+### クエリ例の検証
 
-- 生成される SQL: 全カラムを列挙し、`pii` とカラム名（email / phone / name / address / birth / notes など）から判定したマスク式を付け、`WHERE td_interval(time, '<range>') ORDER BY time DESC LIMIT 10`（`time` 列が無いテーブルは条件なし）
-- 列のマスク判定を変えたいときは、テーブル JSON の `pii` を直してから SQL を作り直す
-- `import-samples` は結果の先頭 10 行を、全カラム分そろえて `samples.rows` に書き、取り込み時にもう一度マスクする
-- `_work/` はカタログの外なので ZIP には入らない
-
-### サンプルクエリの検証
-
-載せる前に、`LIMIT 1` を付けて `tdx query` で実行し、エラーが無いことを確認する（集計結果の値はカタログに書かない）。
+`sample_queries` はSQLテキストだけを保持する。テーブル・カラム名、型、JOINキーをスキーマと照合する。`LIMIT 1` でも個票は返り得るため、検証目的で行データを取得しない。実行が必要な場合はユーザーに確認し、最終出力を集計値だけに限定する。
 
 ## 7. ファイルへの書き出し
 

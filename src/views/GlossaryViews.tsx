@@ -135,7 +135,6 @@ export function IdSystemsView({ catalog, route }: { catalog: LoadedCatalog; rout
             <dl className="facts-inline">
               {system.pattern && <><dt>形式</dt><dd><code>{system.pattern}</code></dd></>}
               {system.length !== undefined && <><dt>桁数</dt><dd>{system.length}</dd></>}
-              {system.example_masked && <><dt>例</dt><dd><code>{system.example_masked}</code></dd></>}
             </dl>
             {system.note && <p className="note">{system.note}</p>}
             <ul className="plain-list">

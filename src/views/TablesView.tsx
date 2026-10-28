@@ -14,16 +14,14 @@ import {
   TableLink,
   formatLastUpdated,
   formatNumber,
-  formatValue,
 } from '../components/common'
 import { LineageGraph } from '../components/LineageGraph'
 import type { CatalogTable, LoadedCatalog } from '../types/catalog'
 
-type Tab = 'overview' | 'schema' | 'samples' | 'queries' | 'lineage'
+type Tab = 'overview' | 'schema' | 'queries' | 'lineage'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: '概要' },
   { id: 'schema', label: 'スキーマ' },
-  { id: 'samples', label: 'サンプルデータ' },
   { id: 'queries', label: 'サンプルクエリ' },
   { id: 'lineage', label: 'リネージ' },
 ]
@@ -233,36 +231,6 @@ function TableDetail({ table, catalog, initialTab, highlight }: { table: Catalog
             </tbody>
           </table>
         </div>
-      )}
-
-      {tab === 'samples' && (
-        table.samples?.rows.length ? (
-          <>
-            <p className="muted small">
-              {table.samples.captured_at && `取得日 ${table.samples.captured_at}。`}
-              {table.samples.masked_columns?.length ? `マスク済み: ${table.samples.masked_columns.join(', ')}。` : ''}
-              {table.samples.note}
-            </p>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>{table.columns.map((column) => <th key={column.name}><code>{column.name}</code><span>{column.logical_name}</span></th>)}</tr>
-                </thead>
-                <tbody>
-                  {table.samples.rows.map((row, index) => (
-                    <tr key={index}>{table.columns.map((column) => <td key={column.name} className={row[column.name] === null || row[column.name] === undefined ? 'null' : ''}>{formatValue(row[column.name])}</td>)}</tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <Empty>
-            {table.samples
-              ? `サンプルは 0 行です。${table.samples.note ?? 'カタログ作成時に取得されていません。builder SKILL の更新モードで sample-sql → import-samples を実行してください。'}`
-              : 'サンプルデータは登録されていません。'}
-          </Empty>
-        )
       )}
 
       {tab === 'queries' && (

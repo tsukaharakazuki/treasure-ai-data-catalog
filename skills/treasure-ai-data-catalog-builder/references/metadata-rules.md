@@ -10,15 +10,15 @@
 | 2 | TD に登録済みの説明・既存ドキュメント | `confirmed` |
 | 3 | Parent Segment の属性・ビヘイビアの表示名、日本語名・名前変換の設定（`tdx ps fields` / `ps pull` の YAML） | `inferred`（下記） |
 | 4 | Workflow / Saved Query の SQL の別名（`AS 売上`）・コメント | `inferred` |
-| 5 | カラム名・型・プロファイル（桁数・コード値）からの推定 | `inferred` |
+| 5 | カラム名・型・集計プロファイル（桁数・NULL率・種類数）からの推定 | `inferred` |
 | — | 意味が複数考えられる、ID体系が未確定 | `needs_review` |
 
 ### Parent Segment の表示名・名前変換の扱い
 
 Parent Segment に日本語の表示名や名前変換の指示が設定されていても、**人が手で入力したものなので正確とは限らない**。判断材料の一つとして使い、そのまま確定扱いにしない。
 
-- 表示名と、カラム名・型・値のプロファイル・元テーブルの説明・SQL の使われ方を突き合わせる。矛盾が無ければ表示名を採用し `inferred`、ユーザーが確認したら `confirmed`。
-- 矛盾がある（例: 表示名は「購入日」だが値が UNIX 秒の取込時刻、表示名は「会員ID」だが形式がブラウザID）場合は `needs_review` にし、説明に「Parent Segment の表示名は『○○』」と根拠を残して、ユーザーに確認する。
+- 表示名と、カラム名・型・集計統計と仕様書・元テーブルの説明・SQL の使われ方を突き合わせる。矛盾が無ければ表示名を採用し `inferred`、ユーザーが確認したら `confirmed`。
+- 矛盾がある（例: 表示名は「購入日」だが定義書では UNIX 秒の取込時刻、表示名は「会員ID」だが形式がブラウザID）場合は `needs_review` にし、説明に「Parent Segment の表示名は『○○』」と根拠を残して、ユーザーに確認する。
 - 表記ゆれ（「会員ＩＤ」「会員id」「会員番号」）や、同じ元カラムに別の表示名が付いているものは、カタログ側で正規化した名前（全テーブルで共通の論理名）を採用し、元の表示名は `description` に残す。
 - 正規化した結果を Parent Segment の設定に反映してほしいと依頼されたら、SKILL.md の「Parent Segment への反映モード」に従う。
 
@@ -26,7 +26,7 @@ Parent Segment に日本語の表示名や名前変換の指示が設定され�
 
 - **利用者の言語**（`catalog.json` の `language`）で、名詞句にする。例: `注文日時（JST）`、`注文合計金額（税込）`、`会員ステータス`
 - 単位・税込/税抜・タイムゾーン・粒度が分かれば括弧で添える
-- `flag` / `type` / `kbn` などは値の意味が分かる名前にし、`values` にコード定義を書く（`{"0": "未退会", "1": "退会"}`）
+- `flag` / `type` / `kbn` などは仕様書・ユーザーの説明で意味を確認し、`values` に確認済みのコード定義だけを書く（`{"0": "未退会", "1": "退会"}`）
 - 同じ意味のカラムはテーブルをまたいで同じ論理名にする（`member_id` はどこでも `統合会員ID`）
 - 推測で業務固有の名前を作らない。分からなければ `needs_review` にして説明に推定根拠を書く
 
@@ -54,7 +54,7 @@ Parent Segment に日本語の表示名や名前変換の指示が設定され�
 ### 判定の手順
 
 1. ID 候補カラムを集める（名前が `*id` / `*_no` / `*_code` / `*_key`、または一意性が高い varchar / bigint）
-2. 形式プロファイル（`collection-playbook.md`）で `len` と `shape`（例: `9999999999`、`A9999999`）を取る
+2. 集計プロファイル（`collection-playbook.md`）で長さの最小・最大、数字形式の件数、NULL率、種類数を取る。ID実例や文字置換した shape は取らない
 3. 形式と名前でグループ化し、グループ間・グループ内で一致率を測る
 4. 次のどれかに当たるものは **ユーザーに問い合わせる**
    - 同名なのに形式が違う（例: `customer_id` が A テーブルでは10桁数字、B テーブルでは `C` + 7桁）
@@ -74,7 +74,7 @@ Parent Segment に日本語の表示名や名前変換の指示が設定され�
 >
 > A と B は crm_members で対応付いているように見えます（一致率 97%）。
 
-回答を `glossary.json` の `id_systems` に書く（`status: confirmed`）。`example_masked` はマスク済みの例だけを書く。
+回答を `glossary.json` の `id_systems` に書く（`status: confirmed`）。形式の説明と桁数だけを記録し、`example_masked` などのID実例はマスク済みでも書かない。上の表の形式は説明用の架空仕様であり、実値から接頭辞を抽出しない。
 
 ## 個人情報の区分（pii）
 
@@ -87,23 +87,12 @@ Parent Segment に日本語の表示名や名前変換の指示が設定され�
 
 迷ったら重い方に倒す。
 
-## サンプルのマスク
+## 行サンプルの取得・保存は禁止
 
-**値を取得する時点で** SQL でマスクする（生値を取得してから伏せない）。
-
-| 区分 | SELECT 句の式（Trino） | 例 |
-| --- | --- | --- |
-| `none` | `c` | そのまま |
-| `identifier` | `CASE WHEN c IS NULL THEN NULL WHEN length(CAST(c AS varchar)) <= 6 THEN '****' ELSE concat(substr(CAST(c AS varchar), 1, 2), '****', substr(CAST(c AS varchar), -1)) END AS c` | `10****1` |
-| `personal`（メール） | `CASE WHEN c IS NULL THEN NULL ELSE regexp_replace(c, '^(.)[^@]*@.*$', '$1***@***') END AS c` | `t***@***` |
-| `personal`（その他） | `CASE WHEN c IS NULL THEN NULL ELSE '[masked]' END AS c` | `[masked]` |
-| `sensitive` | `CASE WHEN c IS NULL THEN NULL ELSE '[masked]' END AS c` | `[masked]` |
-| 除外 | `NULL AS c` | — |
-| array / map / json | `CASE WHEN c IS NULL THEN NULL ELSE '[masked]' END AS c`（中身が安全と分かるものを除く） | — |
-
-- 行数は **10 行**（`privacy.sample_rows_max` の既定 10。上限もこの値）。テーブルの行数が 10 未満ならある分だけ
-- `samples.masked_columns` にマスクしたカラム名を列挙する
-- ユーザーが「サンプルを含めない」を選んだら `samples` を省略する
+- PII区分にかかわらず、実データの行は取得しない。マスク・部分伏字・ハッシュ・文字置換も例外にしない。
+- `samples` と `example_masked` は現在のテーブルにも過去のスナップショットにも置かない。`privacy.sample_rows_max` は 0 のみ（省略も可）。ユーザーに取得可否を選ばせない。
+- カタログにはスキーマ・仕様上の意味・コード定義・集計統計・SQLテキストだけを記録する。チャット・ログ・MEMORY.md・ZIP・生成SKILLにも行データを転記しない。
+- CLI検証は旧フィールドを拒否するが、自由記述・SQL・ログ中のあらゆる個人情報を検出する保証はない。取得時点から行データを扱わないことが境界になる。
 
 ## 処理事例（recipes）
 

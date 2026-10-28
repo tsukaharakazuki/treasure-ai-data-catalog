@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds the synthetic sample catalog with two released revisions and packs it
 // for the viewer's 「サンプルを開く」 button. Every company, person and value here
-// is fictional.
+// is fictional. The demo contains metadata and SQL examples, never sample rows.
 //
 //   node scripts/build-sample.mjs [--out examples/demo-retail-catalog]
 //
@@ -45,14 +45,6 @@ function tables(revision) {
       ...(revision >= 2 ? [col('coupon_code', 'varchar', 'クーポンコード', { description: '注文に適用されたクーポン。未使用は NULL。' })] : []),
       timeCol(),
     ],
-    samples: {
-      captured_at: '2026-10-08', masked_columns: ['customer_id'],
-      rows: [
-        { order_id: '100245', customer_id: 'C00****1', order_total: 5980, status: 'fulfilled', ordered_at: '2026-10-07 21:14:03', time: 1759839243 },
-        { order_id: '100246', customer_id: null, order_total: 2200, status: 'paid', ordered_at: '2026-10-07 21:20:41', time: 1759839641 },
-        { order_id: '100247', customer_id: 'C01****8', order_total: 12800, status: 'cancelled', ordered_at: '2026-10-07 22:02:17', time: 1759842137 },
-      ],
-    },
     sample_queries: [
       { title: '直近7日の日別EC売上（キャンセル除外）', engine: 'trino', sql: "SELECT substr(ordered_at, 1, 10) AS order_date,\n       SUM(order_total) AS sales\nFROM raw_ec.shopify_orders\nWHERE td_interval(time, '-7d', 'JST')\n  AND status NOT IN ('cancelled', 'refunded')\nGROUP BY 1\nORDER BY 1" },
       { title: 'ステータス別の注文件数（今月）', engine: 'trino', sql: "SELECT status, COUNT(*) AS orders\nFROM raw_ec.shopify_orders\nWHERE td_interval(time, '0M', 'JST')\nGROUP BY 1\nORDER BY 2 DESC" },
@@ -72,10 +64,6 @@ function tables(revision) {
       col('discount_amount', 'double', '値引額', { description: '明細単位の値引額（税込）。' }),
       timeCol(),
     ],
-    samples: { captured_at: '2026-10-08', rows: [
-      { order_id: '100245', line_no: 1, sku: 'MUG-0012', unit_price: 1980, quantity: 2, discount_amount: 0, time: 1759839243 },
-      { order_id: '100245', line_no: 2, sku: 'TWL-0301', unit_price: 2020, quantity: 1, discount_amount: 0, time: 1759839243 },
-    ] },
     sample_queries: [
       { title: 'SKU別売上 TOP20（直近30日）', engine: 'trino', sql: "SELECT i.sku, SUM(i.unit_price * i.quantity - i.discount_amount) AS sales\nFROM raw_ec.shopify_order_items i\nJOIN raw_ec.shopify_orders o ON o.order_id = i.order_id\nWHERE td_interval(i.time, '-30d', 'JST')\n  AND o.status NOT IN ('cancelled', 'refunded')\nGROUP BY 1\nORDER BY 2 DESC\nLIMIT 20" },
     ],
@@ -93,10 +81,6 @@ function tables(revision) {
       col('txn_at', 'varchar', '取引日時（JST文字列）'),
       timeCol(),
     ],
-    samples: { captured_at: '2026-10-08', masked_columns: ['member_card_no'], rows: [
-      { receipt_no: '0012-20261007-0042', store_code: '0012', member_card_no: '29**********3', amount: 3480, txn_at: '2026-10-07 13:42:10', time: 1759812130 },
-      { receipt_no: '0012-20261007-0043', store_code: '0012', member_card_no: null, amount: 880, txn_at: '2026-10-07 13:45:55', time: 1759812355 },
-    ] },
     sample_queries: [
       { title: '店舗別売上（前日）', engine: 'trino', sql: "SELECT store_code, SUM(amount) AS sales, COUNT(*) AS receipts\nFROM raw_ec.pos_transactions\nWHERE td_interval(time, '-1d', 'JST')\nGROUP BY 1\nORDER BY 2 DESC" },
     ],
@@ -119,9 +103,6 @@ function tables(revision) {
       col('registered_at', 'varchar', '会員登録日'),
       timeCol(),
     ],
-    samples: { captured_at: '2026-10-08', masked_columns: ['member_id', 'ec_customer_id', 'card_no', 'email', 'birth_date'], rows: [
-      { member_id: '10****0021', ec_customer_id: 'C00****1', card_no: '29**********3', email: 't***@example.com', birth_date: '19**-**-**', gender_code: '2', pref: '東京都', registered_at: '2019-04-12', time: 1759777200 },
-    ] },
     sample_queries: [
       { title: 'ID 紐付け状況', engine: 'trino', sql: 'SELECT COUNT(*) AS members,\n       COUNT(ec_customer_id) AS with_ec,\n       COUNT(card_no) AS with_card\nFROM raw_ec.crm_members' },
     ],
@@ -236,23 +217,7 @@ function tables(revision) {
   return all.map((table) => {
     const [rowCount, maxTime] = measured[table.name] ?? []
     const withStats = rowCount === undefined ? table : { ...table, row_count: rowCount, ...(maxTime ? { last_updated_unixtime: maxTime } : {}) }
-    return withStats.samples ? { ...withStats, samples: { ...withStats.samples, rows: tenRows(withStats.samples.rows, withStats.columns) } } : withStats
-  })
-}
-
-// Pad the hand-written sample rows to 10, as import-samples would store them:
-// every column present, unmasked ids bumped so rows stay distinct.
-function tenRows(rows, columns) {
-  const bump = (value, step) => {
-    if (typeof value === 'number') return value > 1e9 ? value - step * 637 : value
-    if (typeof value !== 'string' || /[*]|masked/.test(value)) return value
-    const match = /^(.*?)(\d+)$/.exec(value)
-    return match ? `${match[1]}${String(Number(match[2]) + step).padStart(match[2].length, '0')}` : value
-  }
-  return Array.from({ length: 10 }, (_, index) => {
-    const base = rows[index % rows.length]
-    const step = Math.floor(index / rows.length) * rows.length + (index % rows.length) - (index % rows.length)
-    return Object.fromEntries(columns.map((column) => [column.name, index < rows.length ? base[column.name] ?? null : bump(base[column.name] ?? null, step)]))
+    return withStats
   })
 }
 
@@ -359,9 +324,9 @@ function glossary(revision) {
       { term: 'アウトレット店', category: '店舗', definition: '店舗コードが 9 で始まる店舗。通常店舗の売上と分けて報告する。', related_columns: ['raw_ec.pos_transactions.store_code'] },
     ],
     id_systems: [
-      { id: 'member_id', name: '統合会員ID', description: 'CRM で採番する全チャネル共通の会員ID。分析の標準キー。', pattern: '^[0-9]{10}$', length: 10, example_masked: '10****0021', status: 'confirmed', columns: ['raw_ec.crm_members.member_id', 'raw_ec.web_pageviews.member_id', 'ec_dwh.orders_unified.member_id', 'ec_dwh.member_master.member_id', 'cdp_audience_1001.customers.member_id'] },
-      { id: 'ec_customer_id', name: 'EC会員番号', description: 'Shopify 側の会員番号。統合会員IDとは crm_members で対応付ける。', pattern: '^C[0-9]{7}$', length: 8, example_masked: 'C00****1', status: 'confirmed', columns: ['raw_ec.shopify_orders.customer_id', 'raw_ec.crm_members.ec_customer_id'] },
-      { id: 'point_card_no', name: 'ポイントカード番号', description: '店舗のポイントカード番号。', pattern: '^29[0-9]{11}$', length: 13, example_masked: '29**********3', status: 'confirmed', columns: ['raw_ec.pos_transactions.member_card_no', 'raw_ec.crm_members.card_no'] },
+      { id: 'member_id', name: '統合会員ID', description: 'CRM で採番する全チャネル共通の会員ID。分析の標準キー。', pattern: '^[0-9]{10}$', length: 10, status: 'confirmed', columns: ['raw_ec.crm_members.member_id', 'raw_ec.web_pageviews.member_id', 'ec_dwh.orders_unified.member_id', 'ec_dwh.member_master.member_id', 'cdp_audience_1001.customers.member_id'] },
+      { id: 'ec_customer_id', name: 'EC会員番号', description: 'Shopify 側の会員番号。統合会員IDとは crm_members で対応付ける。', pattern: '^C[0-9]{7}$', length: 8, status: 'confirmed', columns: ['raw_ec.shopify_orders.customer_id', 'raw_ec.crm_members.ec_customer_id'] },
+      { id: 'point_card_no', name: 'ポイントカード番号', description: '店舗のポイントカード番号。', pattern: '^29[0-9]{11}$', length: 13, status: 'confirmed', columns: ['raw_ec.pos_transactions.member_card_no', 'raw_ec.crm_members.card_no'] },
       { id: 'td_client_id', name: 'ブラウザID', description: 'TD JS SDK が発行する Cookie ID。', pattern: 'UUID', status: 'confirmed', columns: ['raw_ec.web_pageviews.td_client_id'] },
     ],
     recipes,

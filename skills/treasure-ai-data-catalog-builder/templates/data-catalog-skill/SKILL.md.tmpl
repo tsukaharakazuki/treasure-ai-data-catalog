@@ -14,7 +14,7 @@ description: "{{customer}}（{{service}}）の Treasure Data データカタロ�
 | ファイル | 内容 | いつ読むか |
 | --- | --- | --- |
 | `references/INDEX.md` | テーブル一覧・ID体系・用語・処理事例・アセットの索引 | **最初に必ず読む** |
-| `references/catalog/tables/<db>/<table>.json` | スキーマ、論理名、説明、利用用途、サンプルデータ、サンプルクエリ | 使うテーブルが決まったら |
+| `references/catalog/tables/<db>/<table>.json` | スキーマ、論理名、説明、利用用途、集計統計、クエリ例（SQLテキスト） | 使うテーブルが決まったら |
 | `references/catalog/glossary.json` | 用語、ID体系、処理事例（指示 → テーブル別の計算式）、業務ルール | 集計・用語の質問 |
 | `references/catalog/relationships.json` | ER（結合キーとカーディナリティ） | JOIN するとき |
 | `references/catalog/lineage.json` | Source / Workflow / Saved Query / Parent Segment とテーブルの流れ | 由来・影響範囲の質問 |
@@ -42,7 +42,8 @@ description: "{{customer}}（{{service}}）の Treasure Data データカタロ�
 ## クエリの実行
 
 - ユーザーが実行を求めたときだけ、`tdx query` で **読み取り専用の SELECT** を実行する。`INSERT` / `CREATE` / `DELETE` / `tdx wf run` などの書き込み・実行系は行わない。
-- 結果の確認は `LIMIT` を付け、個人情報（`pii` が `personal` / `sensitive` のカラム）は集計値で返し、個票を出力しない。
+- 最終出力は件数・統計などの集計値だけに限定する。実データの行・ID・DISTINCT値の一覧は、マスク済み・ハッシュ化済みでも取得しない。`LIMIT` を付けても個票の取得は許可されない。
+- 旧版の `samples` / `example_masked` を回答や意味の推測に使わない。クエリ例はSQLテキストであり、実行結果ではない。
 - SQL・結果・レポートなどをファイルに保存するときは、Treasure AI Studio の `my` フォルダ（本人しかアクセスできず、他のメンバーに共有できない）には置かない。`my` 以外のフォルダを作成し、その中に保存する。
 
 ## カタログの限界と更新

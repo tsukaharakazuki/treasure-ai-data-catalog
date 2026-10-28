@@ -1,15 +1,13 @@
 #!/usr/bin/env node
-// Treasure AI Data Catalog CLI — zero dependencies, Node.js 18+.
+// Treasure AI Data Catalog CLI — zero dependencies, patched Node.js 24.22.1+ / 26.12.1+.
 //
 //   node catalog-cli.mjs init <dir> --name acme [--display-name "..."] [--customer "..."] [--service "..."] [--lang ja] [--site us01] [--by "担当者"] [--no-memory]
 //   node catalog-cli.mjs validate <dir>
 //   node catalog-cli.mjs release <dir> --note "初版" [--by "Treasure AI Studio"] [--at <ISO8601>] [--allow-empty]
 //   node catalog-cli.mjs diff <dir> [--from r0001] [--to r0002|current]
-//   node catalog-cli.mjs pack <dir> --out <file.zip> [--force]
+//   node catalog-cli.mjs pack <dir> --out <file.zip>
 //   node catalog-cli.mjs unpack <file.zip> <dir> [--by "担当者"]
 //   node catalog-cli.mjs relationships <dir> [--write]   # ID体系から ER 候補と一致率検証 SQL を出す
-//   node catalog-cli.mjs sample-sql <dir> [--table db.t] [--range -30d|all] [--out <dir>]   # マスク付きサンプル取得 SQL
-//   node catalog-cli.mjs import-samples <dir> --table db.t --file <tdx query --json の出力> [--note "..."]
 //   node catalog-cli.mjs skill <dir> --out <skills-root-or-skill-dir> [--zip <skill.zip>] [--template <SKILL.md.tmpl>]
 //   node catalog-cli.mjs memory <dir> --by "担当者" --stage "収集" --summary "..." [--done "..."] [--decided "..."] [--open "..."] [--next "..."] [--status 進行中|完了|中断]
 //
@@ -17,7 +15,7 @@
 // Treasure AI Studio の「my」フォルダは本人しか見られないため、my の中には何も書き出さない（エラーにする）。
 // This tool only touches local files. It never calls Treasure Data or tdx.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, copyFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, lstatSync, realpathSync, writeFileSync, copyFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
@@ -41,9 +39,12 @@ export const tableKey = (table) => `${table.database}.${table.name}`
 function walk(root) {
   const out = []
   const visit = (dir) => {
+    if (lstatSync(dir).isSymbolicLink()) throw new Error('シンボリックリンクはカタログに含められません')
     for (const name of readdirSync(dir).sort()) {
       const full = join(dir, name)
-      if (statSync(full).isDirectory()) visit(full)
+      const stat = lstatSync(full)
+      if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) throw new Error('リンク・特殊ファイルはカタログに含められません')
+      if (stat.isDirectory()) visit(full)
       else out.push(relative(root, full).split(sep).join('/'))
     }
   }
@@ -142,7 +143,7 @@ export function matchRateSql(relation, bundle) {
 b AS (
   SELECT DISTINCT CAST(${b.columns[0]} AS varchar) AS v
   FROM ${b.table}
-  WHERE ${b.columns[0]} IS NOT NULL
+  WHERE ${hasTime(b.table) ? "td_interval(time, '-30d') AND " : ''}${b.columns[0]} IS NOT NULL
 )
 SELECT COUNT(*) AS sampled, COUNT(b.v) AS matched,
        ROUND(100.0 * COUNT(b.v) / NULLIF(COUNT(*), 0), 1) AS match_pct
@@ -173,6 +174,7 @@ export function normalizeBundle(value) {
 export function readCatalogDir(dir) {
   const optional = (name) => (existsSync(join(dir, name)) ? readJson(join(dir, name)) : undefined)
   if (!existsSync(join(dir, 'catalog.json'))) throw new Error(`${dir}/catalog.json がありません`)
+  walk(dir) // Reject linked files before reading metadata outside the catalog.
   const tablesDir = join(dir, 'tables')
   const tables = existsSync(tablesDir)
     ? walk(tablesDir).filter((path) => path.endsWith('.json')).map((path) => readJson(join(tablesDir, path)))
@@ -192,7 +194,9 @@ export const tablePath = (table) => `tables/${safeSegment(table.database)}/${saf
 
 function readIndex(dir) {
   const path = join(dir, 'revisions/index.json')
-  return existsSync(path) ? arr(readJson(path).revisions) : []
+  const revisions = existsSync(path) ? arr(readJson(path).revisions) : []
+  if (revisions.some((revision) => !/^r\d{4,}$/.test(revision.id) || !Number.isSafeInteger(revision.number) || revision.number < 1)) throw new Error('リビジョンの id / number が不正です')
+  return revisions
 }
 
 // ---------------------------------------------------------------------------
@@ -206,72 +210,29 @@ const SECRET_PATTERNS = [
   [/\bAKIA[0-9A-Z]{16}\b/, 'AWS アクセスキー'],
   [/"(password|passwd|secret|api_?key|access_?token|apikey)"\s*:\s*"[^"]+"/i, '認証情報フィールド'],
 ]
-const MASK_HINT = /[*＊●×]|\[masked\]|\*\*\*/i
-const PII_SAMPLE_LEVELS = new Set(['personal', 'sensitive'])
-
-// ---------------------------------------------------------------------------
-// Sample masking (mirrors references/metadata-rules.md「サンプルのマスク」)
-
-const EXCLUDE_NAME = /(^|_)(password|passwd|pwd|token|secret|api_?key|access_?key)(_|$)/i
-const PERSONAL_NAME = /(^|_)(e?mail(_\d+)?|email_address|tel|phone(_\d+)?|mobile|fax|address|addr|zip|postal|postcode|first_?name(_\d+)?|last_?name(_\d+)?|full_?name|kana|sei|mei|name_kanji|td_ip|ip_address|lat|lon|latitude|longitude|comment|memo|notes?(_c)?|body|message|inquiry|submissionvalues)(_|$)/i
-const SENSITIVE_NAME = /(^|_)(birth(day|date|_date)?|dob|credit|card_number|cvv)(_|$)/i
-const COMPLEX_TYPE = /^(array|map|row|json)/i
-
-/** none / identifier / personal / sensitive / exclude for one column. */
-export function maskLevel(column) {
-  if (EXCLUDE_NAME.test(column.name)) return 'exclude'
-  if (column.pii === 'sensitive' || SENSITIVE_NAME.test(column.name)) return 'sensitive'
-  if (column.pii === 'personal' || PERSONAL_NAME.test(column.name)) return 'personal'
-  if (column.pii === 'identifier') return 'identifier'
-  if (COMPLEX_TYPE.test(column.type ?? '')) return 'complex'
-  return 'none'
-}
-
-const quoteIdent = (name) => `"${String(name).replace(/"/g, '""')}"`
-
-export function maskExpression(column) {
-  const c = quoteIdent(column.name)
-  const v = `CAST(${c} AS varchar)`
-  switch (maskLevel(column)) {
-    case 'exclude': return `NULL AS ${c}`
-    case 'sensitive':
-    case 'complex': return `CASE WHEN ${c} IS NULL THEN NULL ELSE '[masked]' END AS ${c}`
-    case 'personal':
-      return /mail/i.test(column.name)
-        ? `CASE WHEN ${c} IS NULL THEN NULL ELSE regexp_replace(${v}, '^(.)[^@]*@.*$', '$1***@***') END AS ${c}`
-        : `CASE WHEN ${c} IS NULL THEN NULL ELSE '[masked]' END AS ${c}`
-    case 'identifier':
-      return `CASE WHEN ${c} IS NULL THEN NULL WHEN length(${v}) <= 6 THEN '****' ELSE concat(substr(${v}, 1, 2), '****', substr(${v}, -1)) END AS ${c}`
-    default: return c
+// Sample rows are forbidden, even when masked or stored in old snapshots.
+// Inspect the original JSON as well as normalized bundles so unknown fields cannot
+// hide rows that would otherwise be copied verbatim into ZIPs or generated skills.
+export function sampleDataIssues(value, path = '$') {
+  const issues = []
+  const pending = [{ value, path }]
+  while (pending.length) {
+    const item = pending.pop()
+    if (!item.value || typeof item.value !== 'object') continue
+    for (const [key, child] of Object.entries(item.value)) {
+      const location = `${item.path}.${key}`
+      if (['samples', 'example_masked'].includes(key) && child !== null) {
+        issues.push({ severity: 'error', path: location, message: 'サンプルデータの取得・保存は禁止です。samples / example_masked を削除してください（マスク済み・過去リビジョンも対象）' })
+      } else if (key === 'sample_rows_max' && child !== 0) {
+        issues.push({ severity: 'error', path: location, message: 'サンプルデータは禁止です。sample_rows_max は 0 にしてください' })
+      } else if (child && typeof child === 'object') pending.push({ value: child, path: location })
+    }
   }
-}
-
-export function maskValue(column, value) {
-  if (value === null || value === undefined) return value
-  const text = typeof value === 'object' ? JSON.stringify(value) : String(value)
-  switch (maskLevel(column)) {
-    case 'exclude': return null
-    case 'sensitive':
-    case 'complex': return MASK_HINT.test(text) ? value : '[masked]'
-    case 'personal':
-      if (MASK_HINT.test(text)) return value
-      return /mail/i.test(column.name) && text.includes('@') ? `${text[0]}***@***` : '[masked]'
-    case 'identifier':
-      if (MASK_HINT.test(text)) return value
-      return text.length <= 6 ? '****' : `${text.slice(0, 2)}****${text.slice(-1)}`
-    default: return value
-  }
-}
-
-export function sampleSql(table, { range = '-30d', limit = 10 } = {}) {
-  const hasTime = table.columns.some((column) => column.name === 'time')
-  const where = hasTime && range !== 'all' ? `\nWHERE td_interval(time, '${range}')` : ''
-  const order = hasTime ? '\nORDER BY time DESC' : ''
-  return `-- ${tableKey(table)} のマスク付きサンプル（${limit} 行）\nSELECT\n  ${table.columns.map(maskExpression).join(',\n  ')}\nFROM ${table.database}.${quoteIdent(table.name)}${where}${order}\nLIMIT ${limit}\n`
+  return issues
 }
 
 export function lintBundle(bundle) {
-  const issues = []
+  const issues = sampleDataIssues(bundle)
   const push = (severity, path, message) => issues.push({ severity, path, message })
   const c = bundle.catalog ?? {}
   if (c.format !== FORMAT) push('error', 'catalog.json', `format は "${FORMAT}" にしてください`)
@@ -279,7 +240,6 @@ export function lintBundle(bundle) {
   if (!c.name || !/^[a-z0-9][a-z0-9-]*$/.test(c.name)) push('error', 'catalog.json', 'name は英小文字・数字・ハイフンのスラッグにしてください（SKILL名 <name>-data-catalog に使います）')
   if (!c.language) push('warning', 'catalog.json', 'language がありません（例: ja）')
 
-  const maxRows = c.privacy?.sample_rows_max ?? 10
   const keys = new Set()
   const columns = new Map()
   const idSystems = new Set(bundle.glossary.id_systems.map((system) => system.id))
@@ -301,28 +261,6 @@ export function lintBundle(bundle) {
       if (!column.logical_name) push('info', `${key}.${column.name}`, '論理名が未設定です')
       if (column.logical_name_status === 'needs_review') push('info', `${key}.${column.name}`, '論理名が要確認です')
       if (column.id_system && !idSystems.has(column.id_system)) push('warning', `${key}.${column.name}`, `ID体系 "${column.id_system}" が glossary.id_systems にありません`)
-    }
-    const rows = arr(table.samples?.rows)
-    if (rows.length > maxRows) push('error', key, `サンプルは ${maxRows} 行までです（現在 ${rows.length} 行）`)
-    const expectedRows = Math.min(maxRows, typeof table.row_count === 'number' ? table.row_count : maxRows)
-    if (!table.samples) push('info', key, 'サンプルデータがありません（含めない方針なら問題なし）')
-    else if (rows.length < expectedRows && !table.samples.note) {
-      push('warning', key, `サンプルが ${rows.length} 行しかありません（${expectedRows} 行取得してください。少ない理由があれば samples.note に書く）。catalog-cli.mjs sample-sql / import-samples を使う`)
-    }
-    if (rows.length && table.columns.length) {
-      const covered = new Set(rows.flatMap((row) => Object.keys(row ?? {})))
-      const missing = table.columns.filter((column) => !covered.has(column.name)).length
-      if (missing > table.columns.length / 2) push('warning', key, `サンプル行に ${table.columns.length} カラム中 ${missing} カラムがありません（全カラムを取得してください）`)
-    }
-    for (const column of table.columns) {
-      if (!PII_SAMPLE_LEVELS.has(column.pii)) continue
-      for (const row of rows) {
-        const value = row?.[column.name]
-        if (value !== null && value !== undefined && value !== '' && !MASK_HINT.test(String(value))) {
-          push('error', `${key}.${column.name}`, `pii=${column.pii} のサンプル値がマスクされていません`)
-          break
-        }
-      }
     }
     for (const query of arr(table.sample_queries)) {
       if (!query.title || !query.sql) push('warning', key, 'sample_queries には title と sql が必要です')
@@ -373,6 +311,7 @@ function scanSecrets(dir) {
   for (const path of walk(dir)) {
     if (!/\.(json|md|txt|sql|ya?ml)$/i.test(path)) continue
     const text = readFileSync(join(dir, path), 'utf8')
+    if (path.endsWith('.json')) issues.push(...sampleDataIssues(JSON.parse(text), path))
     for (const [pattern, label] of SECRET_PATTERNS) {
       if (pattern.test(text)) issues.push({ severity: 'error', path, message: `${label}が含まれている可能性があります` })
     }
@@ -578,33 +517,71 @@ export function zipFiles(entries) {
   return Buffer.concat([...locals, ...centrals, end])
 }
 
+export const ZIP_LIMITS = { input: 25 * 1024 * 1024, entry: 10 * 1024 * 1024, total: 100 * 1024 * 1024, entries: 5000 }
+
+function safeZipPath(name) {
+  const parts = name.replace(/\/$/, '').split('/')
+  if (!name || name.startsWith('/') || /[\\:]/.test(name) || [...name].some((char) => char.charCodeAt(0) < 32) || parts.some((part) => !part || part === '.' || part === '..' || /[. ]$/.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) {
+    throw new Error('ZIP に不正なパスがあります')
+  }
+  return name
+}
+
 export function unzipFiles(buffer) {
+  if (buffer.length > ZIP_LIMITS.input) throw new Error('ZIP の入力サイズが上限を超えています')
+  const requireBytes = (start, length, end = buffer.length) => {
+    if (!Number.isSafeInteger(start) || start < 0 || start + length > end) throw new Error('ZIP のレコード範囲が不正です')
+  }
   let eocd = -1
   for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65557); i -= 1) {
-    if (buffer.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
+    if (buffer.readUInt32LE(i) === 0x06054b50 && i + 22 + buffer.readUInt16LE(i + 20) === buffer.length) { eocd = i; break }
   }
   if (eocd < 0) throw new Error('ZIP の終端レコードが見つかりません')
   const count = buffer.readUInt16LE(eocd + 10)
-  let pointer = buffer.readUInt32LE(eocd + 16)
+  const centralSize = buffer.readUInt32LE(eocd + 12)
+  const centralStart = buffer.readUInt32LE(eocd + 16)
+  if (buffer.readUInt16LE(eocd + 4) || buffer.readUInt16LE(eocd + 6) || buffer.readUInt16LE(eocd + 8) !== count || count === 0xffff || centralStart === 0xffffffff || centralStart + centralSize !== eocd) throw new Error('分割 ZIP・ZIP64 または不正な ZIP は未対応です')
+  if (count > ZIP_LIMITS.entries) throw new Error('ZIP のファイル数が上限を超えています')
+  let pointer = centralStart
+  let total = 0
   const files = []
+  const names = new Set()
   for (let i = 0; i < count; i += 1) {
+    requireBytes(pointer, 46, eocd)
     if (buffer.readUInt32LE(pointer) !== 0x02014b50) throw new Error('ZIP のセントラルディレクトリが壊れています')
+    const flags = buffer.readUInt16LE(pointer + 8)
     const method = buffer.readUInt16LE(pointer + 10)
+    const crc = buffer.readUInt32LE(pointer + 16)
     const compressedSize = buffer.readUInt32LE(pointer + 20)
+    const size = buffer.readUInt32LE(pointer + 24)
     const nameLength = buffer.readUInt16LE(pointer + 28)
     const extraLength = buffer.readUInt16LE(pointer + 30)
     const commentLength = buffer.readUInt16LE(pointer + 32)
+    const mode = buffer.readUInt32LE(pointer + 38) >>> 16
     const localOffset = buffer.readUInt32LE(pointer + 42)
-    const name = buffer.subarray(pointer + 46, pointer + 46 + nameLength).toString('utf8')
-    pointer += 46 + nameLength + extraLength + commentLength
-    if (name.endsWith('/')) continue
-    if (name.startsWith('/') || name.split('/').includes('..')) throw new Error(`不正なパス: ${name}`)
-    const start = localOffset + 30 + buffer.readUInt16LE(localOffset + 26) + buffer.readUInt16LE(localOffset + 28)
+    requireBytes(pointer, 46 + nameLength + extraLength + commentLength, eocd)
+    const name = safeZipPath(buffer.subarray(pointer + 46, pointer + 46 + nameLength).toString('utf8'))
+    const canonical = name.replace(/\/$/, '').toLowerCase()
+    if (names.has(canonical)) throw new Error('ZIP に重複するパスがあります')
+    names.add(canonical)
+    if (flags & 1 || ![0, 8].includes(method) || buffer.readUInt16LE(pointer + 34) || (mode & 0xf000) === 0xa000) throw new Error('暗号化・リンク・未対応形式の ZIP エントリです')
+    if (size > ZIP_LIMITS.entry || total + size > ZIP_LIMITS.total) throw new Error('ZIP の展開サイズが上限を超えています')
+    requireBytes(localOffset, 30, centralStart)
+    if (buffer.readUInt32LE(localOffset) !== 0x04034b50 || buffer.readUInt16LE(localOffset + 6) !== flags || buffer.readUInt16LE(localOffset + 8) !== method) throw new Error('ZIP のローカルヘッダーが不正です')
+    const localNameLength = buffer.readUInt16LE(localOffset + 26)
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28)
+    requireBytes(localOffset, 30 + localNameLength + localExtraLength + compressedSize, centralStart)
+    if (buffer.subarray(localOffset + 30, localOffset + 30 + localNameLength).toString('utf8') !== name) throw new Error('ZIP のファイル名が一致しません')
+    const start = localOffset + 30 + localNameLength + localExtraLength
     const raw = buffer.subarray(start, start + compressedSize)
-    const data = method === 8 ? inflateRawSync(raw) : method === 0 ? Buffer.from(raw) : null
-    if (!data) throw new Error(`未対応の圧縮方式 ${method}: ${name}`)
-    files.push({ path: name, data })
+    // maxOutputLength also bounds actual output when the advertised size is false.
+    const data = method === 8 ? inflateRawSync(raw, { maxOutputLength: Math.min(ZIP_LIMITS.entry, ZIP_LIMITS.total - total) }) : Buffer.from(raw)
+    if (data.length !== size || crc32(data) !== crc) throw new Error('ZIP のサイズまたは CRC が一致しません')
+    total += data.length
+    if (!name.endsWith('/')) files.push({ path: name, data })
+    pointer += 46 + nameLength + extraLength + commentLength
   }
+  if (pointer !== eocd) throw new Error('ZIP のディレクトリ長が一致しません')
   return files
 }
 
@@ -674,7 +651,12 @@ export function privateFolderOf(path) {
 }
 
 export function assertSharedPath(path, label = '出力先') {
-  const folder = privateFolderOf(path)
+  if (lstatSync(resolve(path), { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('リンクの出力先には書き込めません')
+  // Resolve existing ancestors to prevent a symlink from bypassing the private
+  // folder rule. Individual output paths are checked separately before writes.
+  let ancestor = resolve(path)
+  while (!existsSync(ancestor) && dirname(ancestor) !== ancestor) ancestor = dirname(ancestor)
+  const folder = privateFolderOf(path) ?? privateFolderOf(realpathSync(ancestor))
   if (folder) {
     throw new Error(`${label}（${resolve(path)}）は「my」フォルダ（${folder}）の中です。my は本人しか開けず他のメンバーと共有できないため、my 以外のフォルダ（例: ${join(dirname(folder), 'data-catalog')}）を作成し、その中で作業してください`)
   }
@@ -728,6 +710,7 @@ export function appendMemory(dir, entry, { create = false } = {}) {
     writeFileSync(path, MEMORY_HEADER)
   }
   assertSharedPath(path, 'MEMORY.md')
+  if (lstatSync(path).isSymbolicLink()) throw new Error('MEMORY.md のリンクには書き込めません')
   const text = readFileSync(path, 'utf8')
   for (const [pattern, label] of SECRET_PATTERNS) {
     if (pattern.test(JSON.stringify(entry))) throw new Error(`MEMORY.md に書こうとした内容に${label}が含まれている可能性があります。書き込みを中止しました`)
@@ -773,7 +756,7 @@ function cmdInit(dir, flags) {
     revision: { id: 'draft', number: 0, generated_at: nowIso(), generated_by: 'Treasure AI Studio' },
     td: { site },
     scope: { databases: [], parent_segments: [], workflow_projects: [], saved_queries: [], sources: [], inputs: [] },
-    privacy: { sample_rows_max: 10, masking_policy: '氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする' },
+    privacy: { sample_rows_max: 0, sample_policy: 'サンプルデータの取得・保存は禁止（マスク済みも含む）' },
   })
   writeJson(join(dir, 'lineage.json'), { nodes: [], edges: [] })
   writeJson(join(dir, 'relationships.json'), { relationships: [] })
@@ -827,6 +810,7 @@ function cmdRelease(dir, flags) {
 
 function loadRevision(dir, id) {
   if (!id || id === 'current') return readCatalogDir(dir)
+  if (!/^r\d{4,}$/.test(id)) throw new Error('リビジョン id が不正です')
   const path = join(dir, `revisions/${id}.json`)
   if (!existsSync(path)) throw new Error(`リビジョン ${id} がありません`)
   return normalizeBundle(readJson(path))
@@ -845,9 +829,9 @@ function cmdPack(dir, flags) {
   if (!flags.out) throw new Error('--out が必要です')
   assertSharedPath(flags.out, 'ZIP の出力先')
   const issues = validateDir(dir)
-  if (issues.some((issue) => issue.severity === 'error') && !flags.force) {
+  if (issues.some((issue) => issue.severity === 'error')) {
     printIssues(issues)
-    throw new Error('エラーがあるため ZIP を作成しません（--force で強制）')
+    throw new Error('エラーがあるため ZIP を作成しません（--force でも回避できません）')
   }
   const folder = basename(resolve(dir))
   const files = walk(dir).filter((path) => !PACK_EXCLUDE.some((pattern) => pattern.test(path)))
@@ -870,6 +854,29 @@ function cmdUnpack(file, dir, flags = {}) {
   const manifest = entries.map((entry) => entry.path).filter((path) => path === 'catalog.json' || path.endsWith('/catalog.json')).sort((a, b) => a.length - b.length)[0]
   if (!manifest) throw new Error('catalog.json が ZIP にありません')
   const root = manifest.slice(0, -'catalog.json'.length)
+  // Existing files or linked ancestors could redirect extraction outside the
+  // chosen directory. Refuse all conflicts before writing the first entry.
+  const checkTarget = (target) => {
+    for (let part = resolve(target); part !== dirname(resolve(dir)) && dirname(part) !== part; part = dirname(part)) {
+      if (lstatSync(part, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('リンクを含む展開先には書き込めません')
+    }
+    if (existsSync(target)) throw new Error('展開先に既存ファイルがあります。新しい空のディレクトリを指定してください')
+  }
+  for (const entry of entries) {
+    if (!entry.path.startsWith(root) || entry.path.slice(root.length) === MEMORY_FILE) continue
+    checkTarget(join(dir, entry.path.slice(root.length)))
+  }
+  const memory = memoryPath(dir)
+  if (!existsSync(memory)) checkTarget(memory)
+  else if (lstatSync(memory).isSymbolicLink()) throw new Error('MEMORY.md のリンクには書き込めません')
+  if (existsSync(join(dirname(memory), 'MEMORY.from-zip.md'))) throw new Error('MEMORY.from-zip.md が既にあります')
+  // Check every JSON entry, including snapshots, before writing any file.
+  for (const entry of entries) {
+    if (!entry.path.startsWith(root) || !entry.path.endsWith('.json')) continue
+    if (sampleDataIssues(JSON.parse(entry.data.toString('utf8')), entry.path).length) {
+      throw new Error('サンプルデータを含む ZIP は展開できません。samples と旧 privacy 設定を削除したメタデータ専用 ZIP を使用してください')
+    }
+  }
   let written = 0
   let memoryNote
   for (const entry of entries) {
@@ -906,67 +913,6 @@ function copyTree(source, target, filter) {
   }
 }
 
-function findTable(bundle, key) {
-  const table = bundle.tables.find((item) => tableKey(item) === key)
-  if (!table) throw new Error(`テーブル ${key} がカタログにありません`)
-  return table
-}
-
-function cmdSampleSql(dir, flags) {
-  const bundle = readCatalogDir(dir)
-  const limit = bundle.catalog.privacy?.sample_rows_max ?? 10
-  const tables = typeof flags.table === 'string' ? [findTable(bundle, flags.table)] : bundle.tables
-  const out = typeof flags.out === 'string' ? flags.out : join(dirname(resolve(dir)), '_work/samples')
-  assertSharedPath(out, 'SQL の出力先')
-  mkdirSync(out, { recursive: true })
-  for (const table of tables) {
-    const path = join(out, `${tableKey(table)}.sql`)
-    writeFileSync(path, sampleSql(table, { range: typeof flags.range === 'string' ? flags.range : '-30d', limit }))
-    console.log(`${path}\n  tdx query -f ${path} --json --output ${join(out, `${tableKey(table)}.json`)}`)
-  }
-  console.log(`\n${tables.length} テーブル分の SQL を作成しました。結果は import-samples で取り込んでください。0 行のときは --range -365d または --range all で作り直す。`)
-}
-
-function parseRows(text) {
-  const trimmed = text.trim()
-  if (!trimmed) return []
-  try {
-    const value = JSON.parse(trimmed)
-    if (Array.isArray(value)) return value
-    if (Array.isArray(value?.rows)) return value.rows
-    if (Array.isArray(value?.data) && Array.isArray(value?.columns)) {
-      return value.data.map((row) => Object.fromEntries(value.columns.map((column, index) => [column.name ?? column, row[index]])))
-    }
-  } catch {
-    return trimmed.split('\n').filter(Boolean).map((line) => JSON.parse(line))
-  }
-  throw new Error('結果ファイルの形式を読み取れません（tdx query --json の出力を指定してください）')
-}
-
-function cmdImportSamples(dir, flags) {
-  if (typeof flags.table !== 'string' || typeof flags.file !== 'string') throw new Error('--table <db.table> と --file <result.json> が必要です')
-  assertSharedPath(dir, 'カタログの作業ディレクトリ')
-  const bundle = readCatalogDir(dir)
-  const table = findTable(bundle, flags.table)
-  const limit = bundle.catalog.privacy?.sample_rows_max ?? 10
-  const columns = new Map(table.columns.map((column) => [column.name, column]))
-  const masked = table.columns.filter((column) => maskLevel(column) !== 'none').map((column) => column.name)
-  // Mask again on import so a hand-written query cannot leak raw values.
-  const rows = parseRows(readFileSync(flags.file, 'utf8')).slice(0, limit).map((row) =>
-    Object.fromEntries(table.columns.map((column) => [column.name, maskValue(column, row?.[column.name] ?? null)])))
-  const unknown = rows.length ? Object.keys(parseRows(readFileSync(flags.file, 'utf8'))[0] ?? {}).filter((name) => !columns.has(name)) : []
-  const path = join(dir, tablePath(table))
-  const current = readJson(path)
-  current.samples = {
-    captured_at: new Date().toISOString().slice(0, 10),
-    masked_columns: masked,
-    rows,
-    ...(typeof flags.note === 'string' ? { note: flags.note } : rows.length < limit ? { note: `取得できたのは ${rows.length} 行` } : {}),
-  }
-  writeJson(path, current)
-  console.log(`${flags.table}: ${rows.length} 行を取り込みました（マスク ${masked.length} カラム）${unknown.length ? `。カタログに無いカラムは無視: ${unknown.join(', ')}` : ''}`)
-}
-
 function cmdRelationships(dir, flags) {
   const bundle = readCatalogDir(dir)
   const raw = relationshipItems(existsSync(join(dir, 'relationships.json')) ? readJson(join(dir, 'relationships.json')) : [])
@@ -987,11 +933,17 @@ function cmdRelationships(dir, flags) {
 
 function cmdSkill(dir, flags) {
   if (!flags.out) throw new Error('--out が必要です（skills ディレクトリ、または生成する skill のディレクトリ）')
+  const issues = validateDir(dir)
+  if (issues.some((issue) => issue.severity === 'error')) {
+    printIssues(issues)
+    throw new Error('エラーがあるため SKILL を生成しません')
+  }
   const bundle = readCatalogDir(dir)
   const c = bundle.catalog
   const skillName = `${c.name}-data-catalog`
   const out = basename(resolve(flags.out)) === skillName ? resolve(flags.out) : join(resolve(flags.out), skillName)
   assertSharedPath(out, 'SKILL の出力先')
+  if (existsSync(out) && readdirSync(out).length) throw new Error('SKILL の出力先が空ではありません。過去のサンプルや不要ファイルの混入を防ぐため、新しい空のディレクトリを指定してください')
   if (typeof flags.zip === 'string') assertSharedPath(flags.zip, '配布用 ZIP の出力先')
   const template = readFileSync(typeof flags.template === 'string' ? flags.template : DEFAULT_TEMPLATE, 'utf8')
   const databases = [...new Set(bundle.tables.map((table) => table.database))]
@@ -1032,7 +984,15 @@ function cmdMemory(dir, flags) {
   console.log(`${path} に追記しました`)
 }
 
+export function assertSupportedNode(version = process.versions.node) {
+  const [major, minor, patch] = version.split('.').map(Number)
+  if (!((major === 24 && (minor > 22 || (minor === 22 && patch >= 1))) || (major === 26 && (minor > 12 || (minor === 12 && patch >= 1))))) {
+    throw new Error('セキュリティ修正済みの Node.js 24.22.1+（24系）または 26.12.1+（26系）を使用してください')
+  }
+}
+
 export function main(argv) {
+  assertSupportedNode()
   const [command, ...rest] = argv
   const { positional, flags } = parseArgs(rest)
   switch (command) {
@@ -1043,12 +1003,12 @@ export function main(argv) {
     case 'pack': return cmdPack(positional[0], flags)
     case 'unpack': return cmdUnpack(positional[0], positional[1], flags)
     case 'relationships': return cmdRelationships(positional[0], flags)
-    case 'sample-sql': return cmdSampleSql(positional[0], flags)
-    case 'import-samples': return cmdImportSamples(positional[0], flags)
+    case 'sample-sql':
+    case 'import-samples': throw new Error('サンプルデータの取得・取り込みは禁止されたため、このコマンドは廃止しました')
     case 'skill': return cmdSkill(positional[0], flags)
     case 'memory': return cmdMemory(positional[0], flags)
     default:
-      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split("\n").slice(1, 19).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
+      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n\n')[0].split('\n').slice(1).map((line) => line.replace(/^\/\/ ?/, '')).join('\n'))
       if (command && command !== 'help') process.exitCode = 1
   }
 }

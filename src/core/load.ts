@@ -1,3 +1,4 @@
+import { metadataOnly } from './privacy.ts'
 import { CATALOG_FORMAT, CATALOG_VERSION } from '../types/catalog.ts'
 import { inferRelationships, normalizeRelationship, relationshipItems, resolveTableKeys } from './relations.ts'
 import type {
@@ -43,12 +44,12 @@ export function stripCatalogRoot(files: Map<string, string>): Map<string, string
 
 function parseJson<T>(text: string, path: string, diagnostics: CatalogDiagnostic[]): T | undefined {
   try {
-    return JSON.parse(text) as T
-  } catch (error) {
+    return metadataOnly(JSON.parse(text)) as T
+  } catch {
     diagnostics.push({
       severity: 'error',
       path,
-      message: `JSON を解析できません: ${error instanceof Error ? error.message : String(error)}`,
+      message: 'JSON を解析できません。ファイル形式を確認してください。',
     })
     return undefined
   }
@@ -88,6 +89,7 @@ function toNumber(value: unknown): number | undefined {
 
 /** Row count and MAX(time) are often written under other keys or as strings; fold them in. */
 export function normalizeTable(value: CatalogTable): CatalogTable {
+  value = metadataOnly(value)
   const raw = value as CatalogTable & Record<string, unknown>
   const stats = (raw.stats && typeof raw.stats === 'object' ? raw.stats : {}) as Record<string, unknown>
   const rowCount = [raw.row_count, raw.rowCount, raw.record_count, raw.count, stats.row_count].map(toNumber).find((item) => item !== undefined)
@@ -110,6 +112,7 @@ export function normalizeTable(value: CatalogTable): CatalogTable {
 }
 
 export function normalizeBundle(value: Partial<CatalogBundle>): CatalogBundle {
+  value = metadataOnly(value)
   return {
     catalog: value.catalog as CatalogManifest,
     tables: asArray<CatalogTable>(value.tables).map(normalizeTable).sort(compareTables),
@@ -241,7 +244,7 @@ export function loadCatalogFromFiles(input: Map<string, string>): LoadedCatalog 
     assets: optional<Assets>('assets.json'),
   })
 
-  const snapshots: Record<string, CatalogBundle> = {}
+  const snapshots: Record<string, CatalogBundle> = Object.create(null)
   for (const [path, text] of files) {
     const match = /^revisions\/([^/]+)\.json$/.exec(path)
     if (!match || match[1] === 'index') continue
@@ -260,4 +263,18 @@ export function loadCatalogFromFiles(input: Map<string, string>): LoadedCatalog 
 
   diagnostics.push(...lintBundle(bundle))
   return { ...bundle, revisions, snapshots, changelog: files.get('CHANGELOG.md'), diagnostics }
+}
+
+/** Canonical metadata only: legacy samples and unrelated ZIP members never persist. */
+export function catalogSessionFiles(catalog: LoadedCatalog): Map<string, string> {
+  const clean = metadataOnly(catalog)
+  const files = new Map<string, string>()
+  const put = (path: string, value: unknown) => files.set(path, JSON.stringify(value))
+  for (const name of ['catalog', 'lineage', 'glossary', 'assets'] as const) put(`${name}.json`, clean[name])
+  put('relationships.json', { relationships: clean.relationships })
+  for (const table of clean.tables) put(`tables/${table.database}/${table.name}.json`, table)
+  put('revisions/index.json', { revisions: clean.revisions })
+  for (const [id, snapshot] of Object.entries(clean.snapshots)) put(`revisions/${id}.json`, snapshot)
+  if (clean.changelog) files.set('CHANGELOG.md', clean.changelog)
+  return files
 }

@@ -11,7 +11,7 @@ interface LandingProps {
 }
 
 const FEATURES = [
-  { icon: Table2, title: 'メタデータ', text: 'スキーマ・利用者の言語での論理名・説明・利用用途・マスク済みサンプルデータ' },
+  { icon: Table2, title: 'メタデータ', text: 'スキーマ・利用者の言語での論理名・説明・利用用途（サンプル実データは取得・保存しません）' },
   { icon: Network, title: 'データリネージ', text: 'Source → テーブル → Workflow / Saved Query → Parent Segment の流れ' },
   { icon: Database, title: 'ER図', text: '結合キーとカーディナリティ。ID体系ごとの結合関係' },
   { icon: FileCode2, title: 'サンプルクエリ', text: 'テーブルごとの Trino クエリをワンクリックでコピー' },
@@ -67,7 +67,7 @@ export function Landing({ onFile, onSample, loading, error }: LandingProps) {
         </div>
         {error && <pre className="error-box">{error}</pre>}
         <div className="hero-actions">
-          <button type="button" className="button primary" onClick={onSample} disabled={loading}>サンプルを開く</button>
+          <button type="button" className="button primary" onClick={onSample} disabled={loading}>メタデータのデモを開く</button>
           <a className="button ghost" href={REPO_URL} target="_blank" rel="noreferrer noopener"><GitBranch size={15} /> GitHub</a>
         </div>
       </section>

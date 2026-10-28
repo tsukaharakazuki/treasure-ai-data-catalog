@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Braces, Database, FolderTree, GitFork, History, Network, Search, Table2, Variable, X } from 'lucide-react'
-import { loadCatalogFromFiles } from './core/load'
+import { catalogSessionFiles, loadCatalogFromFiles } from './core/load'
 import { searchCatalog } from './core/search'
 import { readCatalogZip } from './core/zip'
 import { href, navigate, useRoute, type Section } from './router'
@@ -33,14 +33,19 @@ function restoreSession(): LoadedCatalog | undefined {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY)
     if (!raw) return undefined
-    return loadCatalogFromFiles(new Map(JSON.parse(raw) as [string, string][]))
+    sessionStorage.removeItem(SESSION_KEY)
+    if (raw.length >= SESSION_LIMIT) return undefined
+    const loaded = loadCatalogFromFiles(new Map(JSON.parse(raw) as [string, string][]))
+    saveSession(loaded)
+    return loaded
   } catch {
     sessionStorage.removeItem(SESSION_KEY)
     return undefined
   }
 }
 
-function saveSession(files: Map<string, string>): void {
+function saveSession(catalog: LoadedCatalog): void {
+  const files = catalogSessionFiles(catalog)
   try {
     const raw = JSON.stringify([...files.entries()])
     if (raw.length < SESSION_LIMIT) sessionStorage.setItem(SESSION_KEY, raw)
@@ -63,7 +68,7 @@ export default function App() {
       const files = await load()
       const loaded = loadCatalogFromFiles(files)
       setCatalog(loaded)
-      saveSession(files)
+      saveSession(loaded)
       navigate('overview')
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
@@ -75,7 +80,7 @@ export default function App() {
   const openFile = (file: File) => open(() => readCatalogZip(file))
   const openSample = () => open(async () => {
     const response = await fetch('./examples/demo-retail-data-catalog.zip')
-    if (!response.ok) throw new Error(`サンプルを取得できません（${response.status}）`)
+    if (!response.ok) throw new Error(`メタデータのデモを取得できません（${response.status}）`)
     return readCatalogZip(await response.blob())
   })
   const close = () => {

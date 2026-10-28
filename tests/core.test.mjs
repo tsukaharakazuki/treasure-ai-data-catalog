@@ -12,8 +12,7 @@ import { inferRelationships as inferViewer, normalizeRelationship, relationshipI
 import {
   diffBundles,
   inferRelationships as inferCli,
-  maskLevel,
-  sampleSql,
+  sampleDataIssues,
   normalizeRelationship as normalizeCli,
   lintBundle,
   main,
@@ -100,14 +99,17 @@ test('search matches logical names, full-width input and recipes', () => {
   assert.ok(tableMatches(catalog.tables.find((table) => table.name === 'crm_members'), 'メール'))
 })
 
-test('lint flags unmasked personal samples and too many rows', () => {
+test('sample rows are forbidden whether raw, masked, empty or in historical snapshots', () => {
   const bundle = readCatalogDir(SAMPLE_DIR)
-  const crm = bundle.tables.find((table) => table.name === 'crm_members')
-  crm.samples.rows[0].email = 'taro@example.com'
-  crm.samples.rows.push(...Array.from({ length: 10 }, () => ({})))
-  const errors = lintBundle(bundle).filter((issue) => issue.severity === 'error').map((issue) => issue.message)
-  assert.ok(errors.some((message) => message.includes('マスクされていません')))
-  assert.ok(errors.some((message) => message.includes('10 行まで')))
+  assert.deepEqual(sampleDataIssues(bundle), [])
+  for (const samples of [{ rows: [{ email: 'person@example.invalid' }] }, { rows: [{ email: '[masked]' }] }, { rows: [] }, {}]) {
+    const withSamples = structuredClone(bundle)
+    withSamples.tables[0].samples = samples
+    assert.ok(lintBundle(withSamples).some((issue) => issue.severity === 'error' && issue.message.includes('サンプルデータ')))
+  }
+  assert.equal(sampleDataIssues({ snapshots: { r0001: { tables: [{ samples: { rows: [{}] } }] } } }).length, 1)
+  assert.equal(sampleDataIssues({ privacy: { sample_rows_max: 10 } }).length, 1)
+  assert.deepEqual(sampleDataIssues({ samples: null, privacy: { sample_rows_max: 0 } }), [])
 })
 
 test('zip round-trips UTF-8 names and content', () => {
@@ -217,56 +219,62 @@ test('row counts and MAX(time) written under other keys or as strings are normal
   assert.equal(loadCatalogFromFiles(files).tables.find((item) => item.name === 'shopify_orders').last_updated_unixtime, 1791486600)
 })
 
-test('sample SQL masks every column by pii and name, and import re-masks raw values', () => {
-  const table = {
-    database: 'db', name: 't',
-    columns: [
-      { name: 'member_id', type: 'varchar', pii: 'identifier' },
-      { name: 'email', type: 'varchar' },
-      { name: 'phone_1', type: 'varchar' },
-      { name: 'birth_date', type: 'varchar' },
-      { name: 'api_key', type: 'varchar' },
-      { name: 'tags', type: 'array(varchar)' },
-      { name: 'formid', type: 'bigint' },
-      { name: 'time', type: 'bigint' },
-    ],
-  }
-  assert.deepEqual(table.columns.map(maskLevel), ['identifier', 'personal', 'personal', 'sensitive', 'exclude', 'complex', 'none', 'none'])
-  const sql = sampleSql(table)
-  assert.match(sql, /td_interval\(time, '-30d'\)/)
-  assert.match(sql, /ORDER BY time DESC\nLIMIT 10/)
-  assert.match(sql, /NULL AS "api_key"/)
-  assert.match(sql, /\$1\*\*\*@\*\*\*/)
-  assert.ok(!/td_interval/.test(sampleSql(table, { range: 'all' })))
-
-  const work = mkdtempSync(join(tmpdir(), 'catalog-samples-'))
+test('sample collection commands are disabled before reading or writing any file', () => {
+  const work = mkdtempSync(join(tmpdir(), 'catalog-disabled-samples-'))
   const dir = join(work, 'catalog')
-  main(['init', dir, '--name', 'x'])
-  mkdirSync(join(dir, 'tables/db'), { recursive: true })
-  writeFileSync(join(dir, 'tables/db/t.json'), JSON.stringify({ ...table, row_count: 20 }))
-  const result = join(work, 'result.json')
-  const raw = Array.from({ length: 12 }, (_, index) => ({ member_id: `1234567890${index}`, email: 'taro@example.com', phone_1: '0312345678', birth_date: '1990-01-01', api_key: 'abc', tags: ['a'], formid: index, time: 1791486600 }))
-  writeFileSync(result, JSON.stringify(raw))
-  main(['import-samples', dir, '--table', 'db.t', '--file', result])
-  const imported = JSON.parse(readFileSync(join(dir, 'tables/db/t.json'), 'utf8')).samples
-  assert.equal(imported.rows.length, 10)
-  assert.equal(imported.rows[0].member_id, '12****0')
-  assert.equal(imported.rows[0].email, 't***@***')
-  assert.equal(imported.rows[0].phone_1, '[masked]')
-  assert.equal(imported.rows[0].api_key, null)
-  assert.equal(imported.rows[3].formid, 3)
-  const issues = lintBundle(readCatalogDir(dir)).filter((issue) => issue.path === 'db.t' && issue.severity !== 'info')
-  assert.ok(!issues.some((issue) => /サンプル|マスク/.test(issue.message)), JSON.stringify(issues))
+  for (const command of ['sample-sql', 'import-samples']) {
+    assert.throws(() => main([command, dir, '--file', join(work, 'missing.json'), '--out', join(work, 'sql')]), /禁止.*廃止/)
+  }
+  assert.ok(!existsSync(dir))
+  assert.ok(!existsSync(join(work, 'sql')))
+  main(['init', dir, '--name', 'x', '--no-memory'])
+  assert.equal(JSON.parse(readFileSync(join(dir, 'catalog.json'), 'utf8')).privacy.sample_rows_max, 0)
+  assert.ok(!lintBundle(readCatalogDir(dir)).some((issue) => /サンプル/.test(issue.message)))
 })
 
-test('lint flags short or column-poor samples and off-convention lineage ids', () => {
+test('every output command refuses samples in current tables, snapshots or extra JSON, even with force', () => {
+  for (const relativePath of ['tables/raw_ec/crm_members.json', 'revisions/r0001.json', 'extra.json']) {
+    const work = mkdtempSync(join(tmpdir(), 'catalog-row-policy-'))
+    const dir = join(work, 'catalog')
+    main(['unpack', SAMPLE_ZIP, dir])
+    const file = join(dir, relativePath)
+    const value = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}
+    value.samples = { rows: [{ email: '[masked]' }] }
+    writeFileSync(file, JSON.stringify(value))
+    assert.ok(validateDir(dir).some((issue) => issue.severity === 'error' && /サンプルデータ/.test(issue.message)))
+    const zip = join(work, 'unsafe.zip')
+    const skills = join(work, 'skills')
+    assert.throws(() => main(['pack', dir, '--out', zip, '--force']), /ZIP/)
+    assert.throws(() => main(['release', dir, '--allow-empty']), /リリース/)
+    assert.throws(() => main(['skill', dir, '--out', skills]), /SKILL/)
+    assert.ok(!existsSync(zip))
+    assert.ok(!existsSync(skills))
+  }
+})
+
+test('unpack rejects legacy sample data before creating output files', () => {
+  const work = mkdtempSync(join(tmpdir(), 'catalog-legacy-'))
+  const entries = unzipFiles(readFileSync(SAMPLE_ZIP))
+  entries.push({ path: 'demo-retail-catalog/revisions/legacy.json', data: Buffer.from(JSON.stringify({ tables: [{ samples: { rows: [{}] } }] })) })
+  const zip = join(work, 'legacy.zip')
+  writeFileSync(zip, zipFiles(entries))
+  const dir = join(work, 'catalog')
+  assert.throws(() => main(['unpack', zip, dir]), /サンプルデータ/)
+  assert.ok(!existsSync(dir))
+  assert.ok(!existsSync(join(work, 'MEMORY.md')))
+})
+
+test('generated skills require a fresh output directory', () => {
+  const out = mkdtempSync(join(tmpdir(), 'catalog-skill-clean-'))
+  main(['skill', SAMPLE_DIR, '--out', out])
+  assert.throws(() => main(['skill', SAMPLE_DIR, '--out', out]), /空ではありません/)
+})
+
+test('lint still flags off-convention lineage ids without requiring sample data', () => {
   const bundle = readCatalogDir(SAMPLE_DIR)
-  const orders = bundle.tables.find((table) => table.name === 'shopify_orders')
-  orders.samples.rows = [{ order_id: '1' }]
   bundle.lineage.nodes.push({ id: 'src_x', type: 'source', label: 'x' }, { id: 'out_customers', type: 'table', label: 'c', ref: 'raw_ec.crm_members' })
   const messages = lintBundle(bundle).map((issue) => issue.message)
-  assert.ok(messages.some((message) => message.includes('サンプルが 1 行しかありません')))
-  assert.ok(messages.some((message) => message.includes('カラムがありません（全カラムを取得')))
+  assert.ok(!messages.some((message) => /サンプル|マスク/.test(message)))
   assert.ok(messages.some((message) => message.includes('"src_x" は "source:<id>"')))
   assert.ok(messages.some((message) => message.includes('"out_customers" は "table:<db>.<table>"')))
 })
