@@ -45,7 +45,7 @@ catalog/
     "sources": ["shopify_daily_import"],
     "inputs": ["https://console.treasuredata.com/..."]
   },
-  "privacy": { "sample_rows_max": 10, "masking_policy": "氏名・メール・電話・住所・生年月日・端末ID・自由記述はマスクする" },
+  "privacy": { "sample_rows_max": 0, "sample_policy": "実データの行サンプル・値の実例は、マスク済みを含め収集・保存しない。集計値のみ" },
   "description": "任意の説明"
 }
 ```
@@ -58,7 +58,7 @@ catalog/
 | `language` | ○ | 論理名・説明の言語（BCP 47） |
 | `revision` | ○ | `release` が更新する。初期値は `{ "id": "draft", "number": 0 }` |
 | `scope` | | 収集の起点。更新モードはこの範囲を再収集する |
-| `privacy.sample_rows_max` | | サンプル行数（既定 10。取得行数もこの値）。validate が検査する |
+| `privacy` | | 説明用の任意フィールド。行サンプルを有効にする設定はない。`sample_rows_max` は 0 または省略のみ。非0の旧設定は検証エラー |
 
 ## tables/&lt;database&gt;/&lt;table&gt;.json
 
@@ -85,16 +85,11 @@ catalog/
       "description": "Shopify 側の会員番号。統合会員IDとは別体系。",
       "pii": "identifier",
       "id_system": "ec_customer_id",
-      "stats": { "null_ratio": 0.08, "min_length": 8, "max_length": 8, "pattern": "\"C\" + 7桁の数字" }
+      "stats": { "null_ratio": 0.08, "min_length": 8, "max_length": 8, "pattern": "仕様書: \"C\" + 7桁の数字" }
     },
     { "name": "status", "type": "varchar", "logical_name": "注文ステータス", "values": { "paid": "支払済", "cancelled": "キャンセル" } },
     { "name": "time", "type": "bigint", "logical_name": "データ取込時刻（UNIX秒）", "is_partition_key": true }
   ],
-  "samples": {
-    "captured_at": "2026-10-08",
-    "masked_columns": ["customer_id"],
-    "rows": [{ "customer_id": "C0****1", "status": "paid", "time": 1759839243 }]
-  },
   "sample_queries": [
     { "title": "直近7日の日別売上", "engine": "trino", "sql": "SELECT ... WHERE td_interval(time, '-7d', 'JST') ..." }
   ],
@@ -112,8 +107,10 @@ catalog/
 | `columns[].logical_name_status` | `confirmed`（一次情報・ユーザー確認済み）/ `inferred`（推定）/ `needs_review`（要確認） |
 | `columns[].pii` | `none` / `identifier`（会員ID・Cookie ID など）/ `personal`（メール・氏名・電話・住所）/ `sensitive`（生年月日・健康・決済など） |
 | `columns[].id_system` | `glossary.json` の `id_systems[].id` |
-| `columns[].values` | コード値の定義（`{"1": "男性"}`） |
-| `samples.rows` | `pii` が `personal` / `sensitive` の値はマスク必須（`*` または `[masked]` を含むこと）。validate が検査する |
+| `columns[].stats` | 集計値だけ（`null_ratio` / `min_length` / `max_length` / `distinct_approx` など）。`pattern` は仕様書・ユーザー確認に基づく形式の説明で、実データの値・値の形の一覧ではない |
+| `columns[].values` | 仕様書・Workflow の定義・ユーザー確認に基づくコード値の定義（`{"1": "男性"}`）。データ上の DISTINCT 値の一覧から作らない |
+| `sample_queries` | SQL の例（テキスト）。実行結果・行は入れない |
+| `samples` | **禁止（旧形式）**。マスク済みでも不可。非 null の値は、現在のテーブルにもリビジョンのスナップショットにも置けず、validate が error にする |
 
 ## lineage.json
 
@@ -176,7 +173,7 @@ catalog/
     { "term": "売上", "aliases": ["売り上げ", "revenue"], "category": "KPI", "definition": "税込・キャンセル除外の購買金額", "related_tables": ["ec_dwh.orders_unified"] }
   ],
   "id_systems": [
-    { "id": "member_id", "name": "統合会員ID", "pattern": "^[0-9]{10}$", "length": 10, "example_masked": "10****21", "status": "confirmed",
+    { "id": "member_id", "name": "統合会員ID", "pattern": "^[0-9]{10}$", "length": 10, "status": "confirmed",
       "columns": ["raw_ec.crm_members.member_id"], "description": "全チャネル共通の会員ID" }
   ],
   "recipes": [
@@ -201,6 +198,7 @@ catalog/
 - `recipes[].id` は英小文字のスラッグで、リビジョンをまたいで変えない（差分のキー）。
 - 同じ指示でもテーブルで計算が違う場合、`variants` を分けて `expression` / `conditions` / `notes` で違いを明示する。使ってはいけない計算は `expression` を `（使用不可）...` とし、理由を `notes` に書く。
 - 既定として勧める variant は `notes` に「標準」と書く。
+- `id_systems[].pattern` / `length` は仕様書・ユーザーの回答から書く。`example_masked` など ID の実例（マスク済みを含む）は書かない。
 
 ## assets.json
 
@@ -217,6 +215,8 @@ catalog/
 
 ## プライバシー境界
 
-- 入れてよい: 名前・型・説明・統計（NULL率・桁数・形式・おおよその種類数）・コード値の定義・マスク済みサンプル。
-- 入れない: 生の個人情報、API キー、トークン、Webhook URL、パスワード、接続文字列、クエリ結果の全件。
-- `catalog-cli.mjs validate` は、マスク漏れ・行数超過・認証情報らしき文字列を error にする。
+- 入れてよい: 名前・型・説明・集計統計（行数・NULL率・長さの範囲・おおよその種類数・一致率）・仕様に基づく形式とコード値の定義・SQL の例。
+- 入れない: 実データの行サンプル（マスク・ハッシュ化・部分伏字を含む）、ID・コード値の実例、DISTINCT 値の一覧、クエリ結果の個票やダンプ、API キー、トークン、Webhook URL、パスワード、接続文字列。
+- `catalog-cli.mjs validate` は、非 null の `samples` / `example_masked`（現在のテーブル・リビジョンのスナップショットを含む全JSON）と非0の `sample_rows_max`と認証情報らしき文字列を error にする。`release` / `pack` / `skill` は検証エラーがあると `--force` 指定時も出力しない。`unpack` は展開前に検査し、旧行サンプルを含む ZIP と既存ファイルの上書きを拒否する。
+- ビューアーは旧 `samples` を読み込み時に破棄し表示しない。元の ZIP は変更されないので、旧 ZIP の配布・保管は元の保持者が見直す。
+- 検査は補助的な防御で、説明・SQL・MEMORY.md などに転記された実データをすべて検出するものではない。

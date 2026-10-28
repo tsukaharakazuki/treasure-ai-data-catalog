@@ -50,7 +50,6 @@
       "description": "CRM で採番する全チャネル共通の会員ID。分析の標準キー。",
       "pattern": "^[0-9]{10}$",
       "length": 10,
-      "example_masked": "10****0021",
       "status": "confirmed",
       "columns": [
         "raw_ec.crm_members.member_id",
@@ -66,7 +65,6 @@
       "description": "Shopify 側の会員番号。統合会員IDとは crm_members で対応付ける。",
       "pattern": "^C[0-9]{7}$",
       "length": 8,
-      "example_masked": "C00****1",
       "status": "confirmed",
       "columns": [
         "raw_ec.shopify_orders.customer_id",
@@ -79,7 +77,6 @@
       "description": "店舗のポイントカード番号。",
       "pattern": "^29[0-9]{11}$",
       "length": 13,
-      "example_masked": "29**********3",
       "status": "confirmed",
       "columns": [
         "raw_ec.pos_transactions.member_card_no",

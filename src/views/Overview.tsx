@@ -10,9 +10,8 @@ export function Overview({ catalog }: { catalog: LoadedCatalog }) {
     const named = columns.filter((column) => column.logical_name).length
     const review = columns.filter((column) => column.logical_name_status === 'needs_review').length
     const described = catalog.tables.filter((table) => table.description).length
-    const withSamples = catalog.tables.filter((table) => table.samples?.rows.length).length
     const withQueries = catalog.tables.filter((table) => table.sample_queries?.length).length
-    return { columns: columns.length, named, review, described, withSamples, withQueries }
+    return { columns: columns.length, named, review, described, withQueries }
   }, [catalog])
 
   const databases = useMemo(() => {
@@ -80,7 +79,6 @@ export function Overview({ catalog }: { catalog: LoadedCatalog }) {
       <div className="grid-2">
         <Section title="カバレッジ">
           <ul className="plain-list">
-            <li><span>サンプルデータあり</span><span className="muted">{stats.withSamples} / {catalog.tables.length}</span></li>
             <li><span>サンプルクエリあり</span><span className="muted">{stats.withQueries} / {catalog.tables.length}</span></li>
             <li><span>対象範囲（scope）</span><span className="muted">{[
               manifest.scope?.parent_segments?.length ? `PS ${manifest.scope.parent_segments.length}` : '',

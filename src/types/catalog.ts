@@ -45,8 +45,9 @@ export interface CatalogManifest {
     inputs?: string[]
   }
   privacy?: {
-    sample_rows_max?: number
-    masking_policy?: string
+    /** Legacy compatibility only; row collection cannot be enabled. */
+    sample_rows_max?: 0
+    sample_policy?: string
   }
   description?: string
 }
@@ -104,12 +105,6 @@ export interface CatalogTable {
   console_url?: string
   primary_key?: string[]
   columns: CatalogColumn[]
-  samples?: {
-    rows: Record<string, unknown>[]
-    masked_columns?: string[]
-    captured_at?: string
-    note?: string
-  }
   sample_queries?: SampleQuery[]
   notes?: string
 }
@@ -174,7 +169,6 @@ export interface IdSystem {
   description?: string
   pattern?: string
   length?: number | string
-  example_masked?: string
   columns?: string[]
   status?: Confidence
   note?: string
